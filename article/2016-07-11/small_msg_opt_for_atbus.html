@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>对atbus的小数据包的优化 • atframework</title>
+    <meta name="description" content="
+
+
+
+">
+    <meta name="keywords" content="libatbus, cxx, bus, rpc, cpp, c++">
+    
+    
+	<!-- Twitter Cards -->
+	<meta name="twitter:title" content="对atbus的小数据包的优化">
+	<meta name="twitter:description" content="
+
+
+
+">
+	
+	
+	
+	<meta name="twitter:card" content="summary">
+	<meta name="twitter:image" content="/images/logo-m.png">
+	
+	<!-- Open Graph -->
+	<meta property="og:locale" content="cn">
+	<meta property="og:type" content="article">
+	<meta property="og:title" content="对atbus的小数据包的优化">
+	<meta property="og:description" content="
+
+
+
+">
+	<meta property="og:url" content="/article/2016-07-11/small_msg_opt_for_atbus.html">
+	<meta property="og:site_name" content="atframework">
+
+    <link rel="canonical" href="/article/2016-07-11/small_msg_opt_for_atbus.html">
+
+    <link href="/atom.xml" type="application/atom+xml" rel="alternate" title="atframework Atom Feed">
+    <link href="/sitemap.xml" type="application/xml" rel="sitemap" title="Sitemap">
+
+    <meta name="HandheldFriendly" content="True">
+    <meta name="MobileOptimized" content="320">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="cleartype" content="on">
+
+    <link rel="stylesheet" href="/css/main.css">
+    <!-- HTML5 Shiv and Media Query Support for IE -->
+    <!--[if lt IE 9]>
+      <script src="/js/vendor/html5shiv.min.js"></script>
+      <script src="/js/vendor/respond.min.js"></script>
+    <![endif]-->
+
+  </head>
+
+  <body id="js-body">
+    <!--[if lt IE 9]><div class="upgrade notice-warning"><strong>Your browser is quite old!</strong> Why not <a href="http://whatbrowser.org/">upgrade to a newer one</a> to better enjoy this site?</div><![endif]-->
+
+    <header id="masthead">
+  <div class="inner-wrap">
+    <a href="/" class="site-title">atframework</a>
+    <nav role="navigation" class="menu top-menu">
+        
+
+
+
+
+<ul class="menu-item">
+	<li class="home"><a href="/">atframework</a></li>
+	
+    
+    <li><a href="/cn/quick_start/" >快速上手</a></li>
+  
+    
+    <li><a href="/cn/document/" >文档</a></li>
+  
+    
+    <li><a href="/cn/projects/" >项目列表</a></li>
+  
+    
+    <li><a href="/cn/articles/" >技术分享</a></li>
+  
+    
+    <li><a href="/cn/about/" >关于</a></li>
+  
+
+  
+</ul>
+    </nav>
+  </div><!-- /.inner-wrap -->
+</header><!-- /.masthead -->
+    
+
+
+
+
+<nav role="navigation" id="js-menu" class="sliding-menu-content">
+  <h5>atframework <span>目录</span></h5>
+  <ul class="menu-item">
+    <li>
+      <a href="/cn/quick_start/">
+        
+        <div class="title">快速上手</div>
+        
+      </a>
+    </li><li>
+      <a href="/cn/document/">
+        
+        <div class="title">文档</div>
+        
+      </a>
+    </li><li>
+      <a href="/cn/projects/">
+        
+        <div class="title">项目列表</div>
+        
+      </a>
+    </li><li>
+      <a href="/cn/articles/">
+        
+        <div class="title">技术分享</div>
+        
+      </a>
+    </li><li>
+      <a href="/cn/about/">
+        
+        <div class="title">关于</div>
+        
+      </a>
+    </li>
+    
+  </ul>
+</nav>
+<button type="button" id="js-menu-trigger" class="sliding-menu-button lines-button x2" role="button" aria-label="Toggle Navigation">
+  <span class="nav-lines"></span>
+</button>
+
+<div id="js-menu-screen" class="menu-screen"></div>
+
+
+    <div id="page-wrapper">
+      <div id="main" role="main">
+	<article class="wrap" itemscope itemtype="http://schema.org/Article">
+		
+		
+  <nav class="breadcrumbs">
+    <span itemscope itemtype="http://data-vocabulary.org/Breadcrumb">
+      <a href="" itemprop="url">
+        <span itemprop="title">Home</span>
+      </a> › 
+    <span itemscope itemtype="http://data-vocabulary.org/Breadcrumb">
+      <a href="/article/" itemprop="url">
+        <span itemprop="title">Article</span>
+      </a>
+    </span>
+  </nav><!-- /.breadcrumbs -->
+
+		<div class="page-title">
+			<h1>对atbus的小数据包的优化</h1>
+		</div>
+		<div class="inner-wrap">
+			<div id="content" class="page-content" itemprop="articleBody">
+				<nav class="toc">
+<ul id="markdown-toc">
+  <li><a href="#section" id="markdown-toc-section">环境</a></li>
+  <li><a href="#run-on-2016-07-01" id="markdown-toc-run-on-2016-07-01">优化前的压力测试 - Run On 2016-07-01、</a></li>
+  <li><a href="#tbus---run-on-2014-01-14" id="markdown-toc-tbus---run-on-2014-01-14">tbus的性能 - Run On 2014-01-14</a></li>
+  <li><a href="#section-1" id="markdown-toc-section-1">优化分析</a></li>
+  <li><a href="#section-2" id="markdown-toc-section-2">优化实现</a></li>
+  <li><a href="#run-on-2016-07-07" id="markdown-toc-run-on-2016-07-07">优化的成果 - Run On 2016-07-07</a></li>
+  <li><a href="#section-3" id="markdown-toc-section-3">另一个小优化</a></li>
+</ul>
+
+</nav>
+
+<p>atbus是我按之前的思路写得服务器消息通信中间件，目标是简化服务器通信的流程，能够自动选择最优路线，自动的断线重连和通信通道维护。能够<strong>跨平台</strong>并且<strong>高效</strong>。</p>
+
+<p>近期优化底层库，完成atapp库的基本功能，顺带优化了一下atbus的一些功能，也是对<strong>高效</strong>的大幅优化。这次的优化起源于某一次的压力测试，先介绍下压力测试的结果吧。</p>
+
+<h2 id="section">环境</h2>
+<ul>
+  <li>环境: CentOS 7.1, GCC 4.8.5</li>
+  <li>CPU: Xeon E3-1230 v2 3.30GHz*8 (sender和receiver都只用一个核心)</li>
+  <li>内存: 24GB (这是总内存，具体使用数根据配置不同而不同)</li>
+  <li>网络: 千兆网卡 * 1</li>
+  <li>编译选项: -O2 -g -DNDEBUG -ggdb -Wall -Werror -Wno-unused-local-typedefs -std=gnu++11 -D_POSIX_MT_</li>
+  <li>配置选项:</li>
+  <li>
+    <ul>
+      <li>-DATBUS_MACRO_BUSID_TYPE=uint64_t</li>
+    </ul>
+  </li>
+  <li>
+    <ul>
+      <li>-DATBUS_MACRO_CONNECTION_BACKLOG=128</li>
+    </ul>
+  </li>
+  <li>
+    <ul>
+      <li>-DATBUS_MACRO_CONNECTION_CONFIRM_TIMEOUT=30</li>
+    </ul>
+  </li>
+  <li>
+    <ul>
+      <li>-DATBUS_MACRO_DATA_ALIGN_TYPE=uint64_t</li>
+    </ul>
+  </li>
+  <li>
+    <ul>
+      <li>-DATBUS_MACRO_DATA_NODE_SIZE=128</li>
+    </ul>
+  </li>
+  <li>
+    <ul>
+      <li>-DATBUS_MACRO_DATA_SMALL_SIZE=512</li>
+    </ul>
+  </li>
+  <li>
+    <ul>
+      <li>-DATBUS_MACRO_HUGETLB_SIZE=4194304</li>
+    </ul>
+  </li>
+  <li>
+    <ul>
+      <li>-DATBUS_MACRO_MSG_LIMIT=65536</li>
+    </ul>
+  </li>
+</ul>
+
+<p>关于环境方面有一个地方要特别指出的是，由于我的这太测试机还跑了好多其他的服务和两套游戏的服务器环境，所以即便是空闲时候的CPU占用也比较高。不知道对压力测试结果会有多少影响。<br />
+空闲的时候的htop大概这个样子。</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>  1  [||||||||||||||||||||                                                           22.1%]   5  [|||||||||||||||                                                                16.6%]
+  2  [||||||||||||||||||||                                                           21.6%]   6  [||||||||||||||                                                                 15.4%]
+  3  [||||||||||||||||||                                                             20.7%]   7  [|||||||||||||||                                                                16.8%]
+  4  [||||||||||||||||||                                                             20.9%]   8  [||||||||||||||                                                                 16.1%]
+  Mem[|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||17.0G/23.3G]   Tasks: 178, 215 thr; 3 running
+  Swp[                                                                               0K/0K]   Load average: 1.78 1.82 1.79 
+                                                                                              Uptime: 142 days(!), 13:03:09
+</code></pre>
+</div>
+
+<h2 id="run-on-2016-07-01">优化前的压力测试 - Run On 2016-07-01、</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>测试项</th>
+      <th>连接数</th>
+      <th>包长度</th>
+      <th>CPU消耗</th>
+      <th>内存消耗</th>
+      <th>吞吐量</th>
+      <th>QPS</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Linux+本地回环+ipv6+静态缓冲区</td>
+      <td>1</td>
+      <td>8-16384字节</td>
+      <td>93%/100%</td>
+      <td>5.6MB/24MB</td>
+      <td>467MB/s</td>
+      <td>80K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+本地回环+ipv6+静态缓冲区</td>
+      <td>1</td>
+      <td>8-128字节(模拟ping包)</td>
+      <td>97%/100%</td>
+      <td>5.6MB/28MB</td>
+      <td>8.67MB/s</td>
+      <td>165K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+本地回环+ipv6+动态缓冲区(ptmalloc)</td>
+      <td>1</td>
+      <td>8-16384字节</td>
+      <td>95%/100%</td>
+      <td>5.6MB/28MB</td>
+      <td>484MB/s</td>
+      <td>82.6K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+本地回环+ipv6+动态缓冲区(ptmalloc)</td>
+      <td>1</td>
+      <td>8-128字节(模拟ping包)</td>
+      <td>97%/100%</td>
+      <td>5.6MB/28MB</td>
+      <td>8.5MB/s</td>
+      <td>163K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>1</td>
+      <td>8-16384字节</td>
+      <td>98%/98%</td>
+      <td>74MB/74MB</td>
+      <td>1.56GB/s</td>
+      <td>199K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>1</td>
+      <td>8-128字节(模拟ping包)</td>
+      <td>100%/83%</td>
+      <td>74MB/74MB</td>
+      <td>303MB/s</td>
+      <td>5253K/s</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>这里面可以看出来，其实使用共享内存通道的时候，性能已经足够不错了，但是对于使用tcp的时候，特别是小数据包其实QPS不是很高。</p>
+
+<p>如果说对比大部分其他开源的类似的库，这个QPS应该还算还可以。虽然现在忘记了那些个框架的名字，我以前接触过的一些用于游戏的通信中间件，QPS在10w-20w/s之间已经算是比较高的了。<br />
+而且这个中间件主要是面向游戏服务器的通信，而在一个游戏服务器进程中，一般不会有这么高的请求频次。而且游戏服务器一般是逻辑比较复杂，CPU和内存比较容易成为瓶颈。<br />
+所以也是这些原因，要不是看了一下以前跑的腾讯的tbus的压力测试，还真没优化的计划。</p>
+
+<h2 id="tbus---run-on-2014-01-14">tbus的性能 - Run On 2014-01-14</h2>
+
+<ul>
+  <li>环境: tlinux 1.0.7 (based on CentOS 6.2), GCC 4.8.2, gperftools 2.1(启用tcmalloc和cpu profile)</li>
+  <li>CPU: Xeon X3440 2.53GHz*8</li>
+  <li>内存: 8GB (这是总内存，具体使用数根据配置不同而不同)</li>
+  <li>网络: 千兆网卡 * 1</li>
+  <li>编译选项: -O2 -g -DNDEBUG -ggdb -Wall -Werror -Wno-unused-local-typedefs -std=gnu++11 -D_POSIX_MT_</li>
+  <li>配置选项: 无</li>
+</ul>
+
+<table>
+  <thead>
+    <tr>
+      <th>测试项</th>
+      <th>连接数</th>
+      <th>包长度</th>
+      <th>CPU消耗</th>
+      <th>内存消耗</th>
+      <th>吞吐量</th>
+      <th>QPS</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Linux+跨机器转发+ipv4</td>
+      <td>2(仅一个连接压力测试)</td>
+      <td>16KB</td>
+      <td>13%/100%</td>
+      <td>280MB</td>
+      <td>86.4MB/s</td>
+      <td>5.4K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+跨机器转发+ipv4</td>
+      <td>2(仅一个连接压力测试)</td>
+      <td>8KB</td>
+      <td>13%/100%</td>
+      <td>280MB</td>
+      <td>96MB/s</td>
+      <td>12K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+跨机器转发+ipv4</td>
+      <td>2(仅一个连接压力测试)</td>
+      <td>4KB</td>
+      <td>13%/100%</td>
+      <td>280MB</td>
+      <td>92MB/s</td>
+      <td>23K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+跨机器转发+ipv4</td>
+      <td>2(仅一个连接压力测试)</td>
+      <td>2KB</td>
+      <td>15%/100%</td>
+      <td>280MB</td>
+      <td>88MB/s</td>
+      <td>44K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+跨机器转发+ipv4</td>
+      <td>2(仅一个连接压力测试)</td>
+      <td>1KB</td>
+      <td>16%/100%</td>
+      <td>280MB</td>
+      <td>82MB/s</td>
+      <td>82K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+跨机器转发+ipv4</td>
+      <td>2(仅一个连接压力测试)</td>
+      <td>512字节</td>
+      <td>22%/100%</td>
+      <td>280MB</td>
+      <td>79.5MB/s</td>
+      <td>159K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+跨机器转发+ipv4</td>
+      <td>2(仅一个连接压力测试)</td>
+      <td>256字节</td>
+      <td>33%/100%</td>
+      <td>280MB</td>
+      <td>73.5MB/s</td>
+      <td>294K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+跨机器转发+ipv4</td>
+      <td>2(仅一个连接压力测试)</td>
+      <td>128字节</td>
+      <td>50%/100%</td>
+      <td>280MB</td>
+      <td>65.75MB/s</td>
+      <td>526K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>3(仅一个连接压力测试)</td>
+      <td>32KB</td>
+      <td>100%/100%</td>
+      <td>280MB</td>
+      <td>3.06GB/s</td>
+      <td>98K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>3(仅一个连接压力测试)</td>
+      <td>16KB</td>
+      <td>61%/71%</td>
+      <td>280MB</td>
+      <td>1.59GB/s</td>
+      <td>102K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>3(仅一个连接压力测试)</td>
+      <td>8KB</td>
+      <td>36%/70%</td>
+      <td>280MB</td>
+      <td>1.27GB/s</td>
+      <td>163K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>3(仅一个连接压力测试)</td>
+      <td>4KB</td>
+      <td>40%/73%</td>
+      <td>280MB</td>
+      <td>1.30MB/s</td>
+      <td>333K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>3(仅一个连接压力测试)</td>
+      <td>2KB</td>
+      <td>43%/93%</td>
+      <td>280MB</td>
+      <td>1.08GB/s</td>
+      <td>556K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>3(仅一个连接压力测试)</td>
+      <td>1KB</td>
+      <td>54%/100%</td>
+      <td>280MB</td>
+      <td>977MB/s</td>
+      <td>1000K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>3(仅一个连接压力测试)</td>
+      <td>512字节</td>
+      <td>44%/100%</td>
+      <td>280MB</td>
+      <td>610MB/s</td>
+      <td>1250K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>3(仅一个连接压力测试)</td>
+      <td>256字节</td>
+      <td>42%/100%</td>
+      <td>280MB</td>
+      <td>305MB/s</td>
+      <td>1250K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>3(仅一个连接压力测试)</td>
+      <td>128字节</td>
+      <td>42%/100%</td>
+      <td>280MB</td>
+      <td>174MB/s</td>
+      <td>1429K/s</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>由于测试tbus的时候有跨机器的，所以某些进程CPU跑不满也是正常情况。算上CPU的消耗比例，atbus的读性能和tbus对比的话，主要是</p>
+
+<ul>
+  <li>使用<strong>共享内存通道</strong>的时候，读性能是差不多的，写性能atbus要高过tbus大约不到一倍。</li>
+  <li>atbus能够<strong>收敛共享内存通道数量</strong>，能大幅减少不必要的内存消耗。这个设计详见：<a href="https://owent.net/gCsOx">关于BUS通信系统的一些思考（二）</a> 或 https://github.com/atframework/libatbus/tree/master/doc</li>
+  <li>对于<strong>网络通道的大数据包</strong>，读性能仍然是差不多。但是atbus的写性能大约是tbus的4-5倍，QPS大约是6-7倍。</li>
+  <li>但是对于<strong>网络通道的小数据包</strong>，读写都落后tbus很多</li>
+</ul>
+
+<h2 id="section-1">优化分析</h2>
+
+<p>然后因为我看不到tbus的源码，就只能是分析tbus的压力测试结果了。可以很明显的看到从大数据包到小数据包，tbus的整个吞吐量变化非常小，所以猜测tbus可能做了小包合并。</p>
+
+<p>而且很明显在atbus里出现小包时，QPS上升的同时对uv_write调用的次数也变多了。我看了下libuv的源码，虽然它内部有做发送队列，但是每次pop front的时候还是会调用<strong>sendmsg</strong>函数或<strong>write</strong>函数，而这两个都是系统调用消耗很高的。</p>
+
+<p>libuv内的代码大致如下:</p>
+
+<div class="language-c highlighter-rouge"><pre class="highlight"><code><span class="nl">start:</span>
+
+  <span class="n">assert</span><span class="p">(</span><span class="n">uv__stream_fd</span><span class="p">(</span><span class="n">stream</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">);</span>
+
+  <span class="k">if</span> <span class="p">(</span><span class="n">QUEUE_EMPTY</span><span class="p">(</span><span class="o">&amp;</span><span class="n">stream</span><span class="o">-&gt;</span><span class="n">write_queue</span><span class="p">))</span>
+    <span class="k">return</span><span class="p">;</span>
+
+  <span class="c1">// 每次pop front一个发送项目
+</span>  <span class="n">q</span> <span class="o">=</span> <span class="n">QUEUE_HEAD</span><span class="p">(</span><span class="o">&amp;</span><span class="n">stream</span><span class="o">-&gt;</span><span class="n">write_queue</span><span class="p">);</span>
+  <span class="n">req</span> <span class="o">=</span> <span class="n">QUEUE_DATA</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">uv_write_t</span><span class="p">,</span> <span class="n">queue</span><span class="p">);</span>
+  <span class="n">assert</span><span class="p">(</span><span class="n">req</span><span class="o">-&gt;</span><span class="n">handle</span> <span class="o">==</span> <span class="n">stream</span><span class="p">);</span>
+
+  <span class="c1">// blablabla 好多代码 ...
+</span>
+    <span class="cm">/* silence aliasing warning */</span>
+    <span class="p">{</span>
+      <span class="kt">void</span><span class="o">*</span> <span class="n">pv</span> <span class="o">=</span> <span class="n">CMSG_DATA</span><span class="p">(</span><span class="n">cmsg</span><span class="p">);</span>
+      <span class="kt">int</span><span class="o">*</span> <span class="n">pi</span> <span class="o">=</span> <span class="n">pv</span><span class="p">;</span>
+      <span class="o">*</span><span class="n">pi</span> <span class="o">=</span> <span class="n">fd_to_send</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="k">do</span> <span class="p">{</span>
+      <span class="n">n</span> <span class="o">=</span> <span class="n">sendmsg</span><span class="p">(</span><span class="n">uv__stream_fd</span><span class="p">(</span><span class="n">stream</span><span class="p">),</span> <span class="o">&amp;</span><span class="n">msg</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="cp">#if defined(__APPLE__)
+</span>    <span class="cm">/*
+     * Due to a possible kernel bug at least in OS X 10.10 "Yosemite",
+     * EPROTOTYPE can be returned while trying to write to a socket that is
+     * shutting down. If we retry the write, we should get the expected EPIPE
+     * instead.
+     */</span>
+    <span class="k">while</span> <span class="p">(</span><span class="n">n</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">errno</span> <span class="o">==</span> <span class="n">EINTR</span> <span class="o">||</span> <span class="n">errno</span> <span class="o">==</span> <span class="n">EPROTOTYPE</span><span class="p">));</span>
+<span class="cp">#else
+</span>    <span class="k">while</span> <span class="p">(</span><span class="n">n</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="n">errno</span> <span class="o">==</span> <span class="n">EINTR</span><span class="p">);</span>
+<span class="cp">#endif
+</span>  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="k">do</span> <span class="p">{</span>
+      <span class="k">if</span> <span class="p">(</span><span class="n">iovcnt</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="n">write</span><span class="p">(</span><span class="n">uv__stream_fd</span><span class="p">(</span><span class="n">stream</span><span class="p">),</span> <span class="n">iov</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">iov_base</span><span class="p">,</span> <span class="n">iov</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">iov_len</span><span class="p">);</span>
+      <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="n">writev</span><span class="p">(</span><span class="n">uv__stream_fd</span><span class="p">(</span><span class="n">stream</span><span class="p">),</span> <span class="n">iov</span><span class="p">,</span> <span class="n">iovcnt</span><span class="p">);</span>
+      <span class="p">}</span>
+    <span class="p">}</span>
+<span class="cp">#if defined(__APPLE__)
+</span>    <span class="cm">/*
+     * Due to a possible kernel bug at least in OS X 10.10 "Yosemite",
+     * EPROTOTYPE can be returned while trying to write to a socket that is
+     * shutting down. If we retry the write, we should get the expected EPIPE
+     * instead.
+     */</span>
+    <span class="k">while</span> <span class="p">(</span><span class="n">n</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">errno</span> <span class="o">==</span> <span class="n">EINTR</span> <span class="o">||</span> <span class="n">errno</span> <span class="o">==</span> <span class="n">EPROTOTYPE</span><span class="p">));</span>
+<span class="cp">#else
+</span>    <span class="k">while</span> <span class="p">(</span><span class="n">n</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="n">errno</span> <span class="o">==</span> <span class="n">EINTR</span><span class="p">);</span>
+<span class="cp">#endif
+</span>  <span class="p">}</span>
+
+  <span class="c1">// blablabla 好多代码 ...
+</span>  <span class="c1">// 如果还有带发送数据并且fd处于writable状态，goto start
+</span></code></pre>
+</div>
+<p>那么优化方向就很明了了。合并小数据包呗。</p>
+
+<h2 id="section-2">优化实现</h2>
+<p>合包的话最简单的就是在<strong>io_stream_send</strong>里坐点手脚。原先这个函数每调用一次都会调用<strong>uv_write</strong>。现在如果某个连接有数据正在发送，则需要先把要发送的数据保存下来，直接返回成功，然后发送完毕后对保存的数据做合包，然后再一起发送。<br />
+然后如果发送时发现不能发送了，或者write失败，都要走以前的契约，那就是调用发送失败的回调。</p>
+
+<p>起先我给atbus里的buffer_manager模块加了个merge_front和merge_back功能。实现非常复杂，但是写完之后转念一想，如果每次调用都使用merge的话，那岂不是如果要merge N个包，第一个包要copy N次？因为每次都要扩充缓冲区。<br />
+我觉得这个消耗也是没有必要的，所以最终没用这个merge功能，而是采用了一个更简单的方法，定一个<strong>合包缓冲区</strong>。</p>
+
+<p>那么这个<strong>合包缓冲区</strong>该是多大呢？也很简单，因为现在的每个connection的write队列里的数据块结构是write_req_t+4字节hash+动态长度int+数据包长度。<br />
+那么缓冲区太大也没意义，我就设成了: 包大小限制(默认64K)-sizeof(write_req_t)-一个对齐大小（以防数据写乱，目前64位系统是8字节）。</p>
+
+<p>缓冲区也没必要每个connection一个，可以每个线程一个。这个可以用TLS机制实现，方法上一篇文章（Android和IOS的TLS问题）里提到过了，这里不再复述。</p>
+
+<p>然后每次写出时给connection加<strong><em>WRITING</em></strong>标记，写完的回调之后移除，如果调用<strong>io_stream_send</strong>的时候有<strong><em>WRITING</em></strong>标记，则往write队列里加，但不执行实际写操作，如果没有就执行实际写操作。<br />
+执行实际写操作的时候先合包，再写。这样就能保证正在写出的永远是write队列里的第一个数据块。</p>
+
+<p><strong>write队列怎么合包呢？</strong><br />
+对于每个数据块而言，因为都包含了write_req_t，而且这个就是拿来放临时放数据的，并不会通过网络发送，所以可以移除被合包的数据块的这一部分，然后剩下的copy到一起即可。<br />
+由于write队列的缓冲区有静态和动态两种模式，对于动态模式很容易处理，把可以合包的数据全部pop front，copy到<strong>合包缓冲区</strong>，然后合并后的数据push front即可。如果push失败，那必然是内存不足了，这时候肯定就跪了，没啥好说的。整个逻辑都会出问题，不差这一块。<br />
+而对于静态缓冲区而言就多一步操作，因为静态缓冲区是环形队列，那么头部和尾部的数据是不能合并的，否则可能缓冲区剩余空间不足。而因为先前pop front的总长度必然大于最后push front的合包后的数据长度，所以这个push一定成功。</p>
+
+<p>再就是接收端，原先设置了512字节的接收缓冲区，也就是TCP发过来后会随机拆包黏包，所以接收队列空时，第一次一次性最多接收512字节。<br />
+目前一个connection消耗大约480字节，再加上接收合包缓冲区。额外还会消耗一个智能指针的header block和一些额外的开销，原先大约每个connection占用1K多一点。<br />
+我希望能多一些这个第一个包接收的量，因为在游戏服务器中，虽然大多数情况是小数据包，但是超过512字节还是比较容易的。我想总消耗控制在4K，这样的话这个接收缓冲区就设在了3K，当然这个是可以随时辩护调整的。<br />
+每个连接4K意味着如果有2M的连接，会消耗8GB在这上面。当然如果真要搞到2M的连接数，连内核底层的tcp窗口的缓冲区也得改。这个缓冲区默认情况都远大于4K。</p>
+
+<p>最后加的一个东西就是：<strong>write队列什么时候合包？</strong></p>
+
+<p>目前策略是当第一个包小于接收端的缓冲区的时候（也就是3KB）尝试合包，一方面考虑是再大合包的效果也不明显（我们前面大数据包的性能本身不差，瓶颈不是在系统调用上）。另一方面3KB也覆盖大多数数据包大小了。<br />
+如果说这个参数不够好或者在一些特别的机器上需要大量连接且内存吃紧，也可以缩减这个值。</p>
+
+<h2 id="run-on-2016-07-07">优化的成果 - Run On 2016-07-07</h2>
+
+<p>配置选项有所变更:（变更项已经标出）</p>
+
+<ul>
+  <li>-DATBUS_MACRO_BUSID_TYPE=uint64_t</li>
+  <li>-DATBUS_MACRO_CONNECTION_BACKLOG=128</li>
+  <li>-DATBUS_MACRO_CONNECTION_CONFIRM_TIMEOUT=30</li>
+  <li>-DATBUS_MACRO_DATA_ALIGN_TYPE=uint64_t</li>
+  <li>-DATBUS_MACRO_DATA_NODE_SIZE=128</li>
+  <li><strong>-DATBUS_MACRO_DATA_SMALL_SIZE=3072</strong></li>
+  <li>-DATBUS_MACRO_HUGETLB_SIZE=4194304</li>
+  <li>-DATBUS_MACRO_MSG_LIMIT=65536</li>
+</ul>
+
+<table>
+  <thead>
+    <tr>
+      <th>测试项</th>
+      <th>连接数</th>
+      <th>包长度</th>
+      <th>CPU消耗</th>
+      <th>内存消耗</th>
+      <th>吞吐量</th>
+      <th>QPS</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Linux+本地回环+ipv6+静态缓冲区</td>
+      <td>1</td>
+      <td>8-16384字节</td>
+      <td>90%/100%</td>
+      <td>5.8MB/24MB</td>
+      <td>601MB/s</td>
+      <td>95K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+本地回环+ipv6+静态缓冲区</td>
+      <td>1</td>
+      <td>8-128字节(模拟ping包)</td>
+      <td>48%/100%</td>
+      <td>5.8MB/27MB</td>
+      <td>163MB/s</td>
+      <td>2822K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+本地回环+ipv6+动态缓冲区(ptmalloc)</td>
+      <td>1</td>
+      <td>8-16384字节</td>
+      <td>90%/100%</td>
+      <td>5.8MB/24MB</td>
+      <td>607MB/s</td>
+      <td>96K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+本地回环+ipv6+动态缓冲区(ptmalloc)</td>
+      <td>1</td>
+      <td>8-128字节(模拟ping包)</td>
+      <td>48%/100%</td>
+      <td>5.8MB/27MB</td>
+      <td>165MB/s</td>
+      <td>2857K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>1</td>
+      <td>8-16384字节</td>
+      <td>98%/98%</td>
+      <td>74MB/74MB</td>
+      <td>1.56GB/s</td>
+      <td>199K/s</td>
+    </tr>
+    <tr>
+      <td>Linux+共享内存</td>
+      <td>1</td>
+      <td>8-128字节(模拟ping包)</td>
+      <td>100%/83%</td>
+      <td>74MB/74MB</td>
+      <td>303MB/s</td>
+      <td>5253K/s</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>由于没改动共享内存通道的任何代码，所以共享内存的后两项性能测试没有重新跑。<br />
+这个结果可以看到，成果也相当明显，现在对小数据包也能有相当不错的QPS（282w/s）。接收性能和tbus类似，发送性能已经各方面远超tbus了。</p>
+
+<p>这次的优化也就到此结束。最终的Benchmark见： https://github.com/atframework/libatbus/blob/master/doc/Benchmark.md</p>
+
+<h2 id="section-3">另一个小优化</h2>
+<p>其实这次单元测试之前有几次测试，但是感觉性能很有问题。即便共享内存的吞吐量也只有300MB/s。这显然很不正常，后来用valgrind做了下cpu profile，发现90%的CPU耗费在计算数据块的hash值上。<br />
+因为atbus里所有类型的通道都会有催数据做hash而后校验。而这个hash最早是我自己乱搞的一个很简单的算法，很容易碰撞，后来为了严谨一些则换成了CRC32和CRC64。而替换之前是没有这个问题的。<br />
+问题就在于这里，使用map方式实现的<strong>CRC32和CRC64性能太差了</strong>。我还不清楚具体的原因，不过猜测可能和CPU命中率有关。</p>
+
+<p>后来看了下<a href="http://www.canonware.com/jemalloc/">jemalloc</a>的源码，里面用了<a href="https://github.com/aappleby/smhasher">MurmurHash</a> V3算法。所以我也去这里copy了这个算法过来。性能瞬间的提上来了。这个改动很小就不详细说明了，具体可以看这个: https://github.com/atframework/atframe_utils/blob/master/src/algorithm/murmur_hash.cpp</p>
+
+
+				<hr />
+				<footer class="page-footer">
+					
+
+
+<div class="author-image">
+	<img src="/images/owner-logo.jpg" alt="owent">
+</div><!-- ./author-image -->
+<div class="author-content">
+	<h3 class="author-name" >作者： <span itemprop="author">owent</span></h3>
+	<p class="author-bio"></p>
+</div><!-- ./author-content -->
+					
+<div class="inline-btn">
+	<a class="btn-social twitter" href="https://twitter.com/intent/tweet?text=对atbus的小数据包的优化&amp;url=/article/2016-07-11/small_msg_opt_for_atbus.html&amp;via=" target="_blank"><i class="fa fa-twitter" aria-hidden="true"></i> 分享到 Twitter</a>
+	<a class="btn-social facebook" href="https://www.facebook.com/sharer/sharer.php?u=/article/2016-07-11/small_msg_opt_for_atbus.html" target="_blank"><i class="fa fa-facebook" aria-hidden="true"></i> 分享到 Facebook</a>
+	<a class="btn-social google-plus"  href="https://plus.google.com/share?url=/article/2016-07-11/small_msg_opt_for_atbus.html" target="_blank"><i class="fa fa-google-plus" aria-hidden="true"></i> 分享到 Google+</a>
+</div><!-- /.share-this -->
+
+					
+
+<div class="page-meta">
+	<p>更新 <time datetime="2016-07-11T00:00:00Z" itemprop="datePublished">July 11, 2016</time></p>
+</div><!-- /.page-meta -->
+				</footer><!-- /.footer -->
+				<aside>
+					
+				</aside>
+			</div><!-- /.content -->
+		</div><!-- /.inner-wrap -->
+		
+	</article><!-- ./wrap -->
+</div><!-- /#main -->
+
+      <footer role="contentinfo" id="site-footer">
+	<nav role="navigation" class="menu bottom-menu">
+		<ul class="menu-item">
+		
+      
+			<li><a href="//atframe.work" >atframework home</a></li>
+		
+      
+			<li><a href="//github.com/atframework" >github</a></li>
+		
+		</ul>
+	</nav><!-- /.bottom-menu -->
+	<p class="copyright">&#169; 2016 <a href="">atframework</a> powered by <a href="http://jekyllrb.com" rel="nofollow">Jekyll</a> + <a href="http://mmistakes.github.io/skinny-bones-jekyll/" rel="nofollow">Skinny Bones</a>.</p>
+</footer>
+    </div>
+
+    <script src="/js/vendor/jquery-1.9.1.min.js"></script>
+    <script src="/js/main.js"></script>
+
+  </body>
+
+</html>

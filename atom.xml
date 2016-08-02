@@ -1,1 +1,1966 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom"><generator uri="http://jekyllrb.com" version="3.1.6">Jekyll</generator><link href="/atom.xml" rel="self" type="application/atom+xml" /><link href="/" rel="alternate" type="text/html" /><updated>2016-08-01T22:16:50+08:00</updated><id>/</id><title>atframework</title><subtitle>Cloud server solution for game developer based atframework.</subtitle><entry><title>Hello Again</title><link href="/post/2016-08-01/hello-again.html" rel="alternate" type="text/html" title="Hello Again" /><published>2016-08-01T00:00:00+08:00</published><updated>2016-08-01T00:00:00+08:00</updated><id>/post/2016-08-01/hello-again</id><content type="html" xml:base="/post/2016-08-01/hello-again.html">&lt;p&gt;Hello world!&lt;/p&gt;</content><category term="technology" /><summary>Hello world!</summary><media:thumbnail xmlns:media="http://search.yahoo.com/mrss/" url="{&quot;credit&quot;=&gt;&quot;owent&quot;, &quot;creditlink&quot;=&gt;&quot;https://owent.net&quot;}" /></entry><entry><title>Hello</title><link href="/post/2016-08-01/hello.html" rel="alternate" type="text/html" title="Hello" /><published>2016-08-01T00:00:00+08:00</published><updated>2016-08-01T00:00:00+08:00</updated><id>/post/2016-08-01/hello</id><content type="html" xml:base="/post/2016-08-01/hello.html">&lt;p&gt;&lt;a href=&quot;https://owent.net&quot;&gt;https://owent.net&lt;/a&gt;&lt;/p&gt;</content><category term="technology" /><summary>https://owent.net</summary><media:thumbnail xmlns:media="http://search.yahoo.com/mrss/" url="{&quot;feature&quot;=&gt;&quot;logo.png&quot;, &quot;teaser&quot;=&gt;&quot;default-teaser.png&quot;, &quot;credit&quot;=&gt;&quot;owent&quot;, &quot;creditlink&quot;=&gt;&quot;https://owent.net&quot;}" /></entry></feed>
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom"><generator uri="http://jekyllrb.com" version="3.1.6">Jekyll</generator><link href="/atom.xml" rel="self" type="application/atom+xml" /><link href="/" rel="alternate" type="text/html" /><updated>2016-08-02T12:45:36+08:00</updated><id>/</id><title>atframework</title><subtitle>Cloud server solution for game developer based atframework.</subtitle><entry><title>对atbus的小数据包的优化</title><link href="/article/2016-07-11/small_msg_opt_for_atbus.html" rel="alternate" type="text/html" title="对atbus的小数据包的优化" /><published>2016-07-11T00:00:00+08:00</published><updated>2016-07-11T00:00:00+08:00</updated><id>/article/2016-07-11/small_msg_opt_for_atbus</id><content type="html" xml:base="/article/2016-07-11/small_msg_opt_for_atbus.html">&lt;nav class=&quot;toc&quot;&gt;
+&lt;ul id=&quot;markdown-toc&quot;&gt;
+  &lt;li&gt;&lt;a href=&quot;#section&quot; id=&quot;markdown-toc-section&quot;&gt;环境&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#run-on-2016-07-01&quot; id=&quot;markdown-toc-run-on-2016-07-01&quot;&gt;优化前的压力测试 - Run On 2016-07-01、&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#tbus---run-on-2014-01-14&quot; id=&quot;markdown-toc-tbus---run-on-2014-01-14&quot;&gt;tbus的性能 - Run On 2014-01-14&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-1&quot; id=&quot;markdown-toc-section-1&quot;&gt;优化分析&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-2&quot; id=&quot;markdown-toc-section-2&quot;&gt;优化实现&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#run-on-2016-07-07&quot; id=&quot;markdown-toc-run-on-2016-07-07&quot;&gt;优化的成果 - Run On 2016-07-07&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-3&quot; id=&quot;markdown-toc-section-3&quot;&gt;另一个小优化&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;/nav&gt;
+
+&lt;p&gt;atbus是我按之前的思路写得服务器消息通信中间件，目标是简化服务器通信的流程，能够自动选择最优路线，自动的断线重连和通信通道维护。能够&lt;strong&gt;跨平台&lt;/strong&gt;并且&lt;strong&gt;高效&lt;/strong&gt;。&lt;/p&gt;
+
+&lt;p&gt;近期优化底层库，完成atapp库的基本功能，顺带优化了一下atbus的一些功能，也是对&lt;strong&gt;高效&lt;/strong&gt;的大幅优化。这次的优化起源于某一次的压力测试，先介绍下压力测试的结果吧。&lt;/p&gt;
+
+&lt;h2 id=&quot;section&quot;&gt;环境&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;环境: CentOS 7.1, GCC 4.8.5&lt;/li&gt;
+  &lt;li&gt;CPU: Xeon E3-1230 v2 3.30GHz*8 (sender和receiver都只用一个核心)&lt;/li&gt;
+  &lt;li&gt;内存: 24GB (这是总内存，具体使用数根据配置不同而不同)&lt;/li&gt;
+  &lt;li&gt;网络: 千兆网卡 * 1&lt;/li&gt;
+  &lt;li&gt;编译选项: -O2 -g -DNDEBUG -ggdb -Wall -Werror -Wno-unused-local-typedefs -std=gnu++11 -D_POSIX_MT_&lt;/li&gt;
+  &lt;li&gt;配置选项:&lt;/li&gt;
+  &lt;li&gt;
+    &lt;ul&gt;
+      &lt;li&gt;-DATBUS_MACRO_BUSID_TYPE=uint64_t&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;ul&gt;
+      &lt;li&gt;-DATBUS_MACRO_CONNECTION_BACKLOG=128&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;ul&gt;
+      &lt;li&gt;-DATBUS_MACRO_CONNECTION_CONFIRM_TIMEOUT=30&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;ul&gt;
+      &lt;li&gt;-DATBUS_MACRO_DATA_ALIGN_TYPE=uint64_t&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;ul&gt;
+      &lt;li&gt;-DATBUS_MACRO_DATA_NODE_SIZE=128&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;ul&gt;
+      &lt;li&gt;-DATBUS_MACRO_DATA_SMALL_SIZE=512&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;ul&gt;
+      &lt;li&gt;-DATBUS_MACRO_HUGETLB_SIZE=4194304&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;ul&gt;
+      &lt;li&gt;-DATBUS_MACRO_MSG_LIMIT=65536&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;关于环境方面有一个地方要特别指出的是，由于我的这太测试机还跑了好多其他的服务和两套游戏的服务器环境，所以即便是空闲时候的CPU占用也比较高。不知道对压力测试结果会有多少影响。&lt;br /&gt;
+空闲的时候的htop大概这个样子。&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;  1  [||||||||||||||||||||                                                           22.1%]   5  [|||||||||||||||                                                                16.6%]
+  2  [||||||||||||||||||||                                                           21.6%]   6  [||||||||||||||                                                                 15.4%]
+  3  [||||||||||||||||||                                                             20.7%]   7  [|||||||||||||||                                                                16.8%]
+  4  [||||||||||||||||||                                                             20.9%]   8  [||||||||||||||                                                                 16.1%]
+  Mem[|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||17.0G/23.3G]   Tasks: 178, 215 thr; 3 running
+  Swp[                                                                               0K/0K]   Load average: 1.78 1.82 1.79 
+                                                                                              Uptime: 142 days(!), 13:03:09
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h2 id=&quot;run-on-2016-07-01&quot;&gt;优化前的压力测试 - Run On 2016-07-01、&lt;/h2&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;测试项&lt;/th&gt;
+      &lt;th&gt;连接数&lt;/th&gt;
+      &lt;th&gt;包长度&lt;/th&gt;
+      &lt;th&gt;CPU消耗&lt;/th&gt;
+      &lt;th&gt;内存消耗&lt;/th&gt;
+      &lt;th&gt;吞吐量&lt;/th&gt;
+      &lt;th&gt;QPS&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+本地回环+ipv6+静态缓冲区&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;8-16384字节&lt;/td&gt;
+      &lt;td&gt;93%/100%&lt;/td&gt;
+      &lt;td&gt;5.6MB/24MB&lt;/td&gt;
+      &lt;td&gt;467MB/s&lt;/td&gt;
+      &lt;td&gt;80K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+本地回环+ipv6+静态缓冲区&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;8-128字节(模拟ping包)&lt;/td&gt;
+      &lt;td&gt;97%/100%&lt;/td&gt;
+      &lt;td&gt;5.6MB/28MB&lt;/td&gt;
+      &lt;td&gt;8.67MB/s&lt;/td&gt;
+      &lt;td&gt;165K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+本地回环+ipv6+动态缓冲区(ptmalloc)&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;8-16384字节&lt;/td&gt;
+      &lt;td&gt;95%/100%&lt;/td&gt;
+      &lt;td&gt;5.6MB/28MB&lt;/td&gt;
+      &lt;td&gt;484MB/s&lt;/td&gt;
+      &lt;td&gt;82.6K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+本地回环+ipv6+动态缓冲区(ptmalloc)&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;8-128字节(模拟ping包)&lt;/td&gt;
+      &lt;td&gt;97%/100%&lt;/td&gt;
+      &lt;td&gt;5.6MB/28MB&lt;/td&gt;
+      &lt;td&gt;8.5MB/s&lt;/td&gt;
+      &lt;td&gt;163K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;8-16384字节&lt;/td&gt;
+      &lt;td&gt;98%/98%&lt;/td&gt;
+      &lt;td&gt;74MB/74MB&lt;/td&gt;
+      &lt;td&gt;1.56GB/s&lt;/td&gt;
+      &lt;td&gt;199K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;8-128字节(模拟ping包)&lt;/td&gt;
+      &lt;td&gt;100%/83%&lt;/td&gt;
+      &lt;td&gt;74MB/74MB&lt;/td&gt;
+      &lt;td&gt;303MB/s&lt;/td&gt;
+      &lt;td&gt;5253K/s&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;这里面可以看出来，其实使用共享内存通道的时候，性能已经足够不错了，但是对于使用tcp的时候，特别是小数据包其实QPS不是很高。&lt;/p&gt;
+
+&lt;p&gt;如果说对比大部分其他开源的类似的库，这个QPS应该还算还可以。虽然现在忘记了那些个框架的名字，我以前接触过的一些用于游戏的通信中间件，QPS在10w-20w/s之间已经算是比较高的了。&lt;br /&gt;
+而且这个中间件主要是面向游戏服务器的通信，而在一个游戏服务器进程中，一般不会有这么高的请求频次。而且游戏服务器一般是逻辑比较复杂，CPU和内存比较容易成为瓶颈。&lt;br /&gt;
+所以也是这些原因，要不是看了一下以前跑的腾讯的tbus的压力测试，还真没优化的计划。&lt;/p&gt;
+
+&lt;h2 id=&quot;tbus---run-on-2014-01-14&quot;&gt;tbus的性能 - Run On 2014-01-14&lt;/h2&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;环境: tlinux 1.0.7 (based on CentOS 6.2), GCC 4.8.2, gperftools 2.1(启用tcmalloc和cpu profile)&lt;/li&gt;
+  &lt;li&gt;CPU: Xeon X3440 2.53GHz*8&lt;/li&gt;
+  &lt;li&gt;内存: 8GB (这是总内存，具体使用数根据配置不同而不同)&lt;/li&gt;
+  &lt;li&gt;网络: 千兆网卡 * 1&lt;/li&gt;
+  &lt;li&gt;编译选项: -O2 -g -DNDEBUG -ggdb -Wall -Werror -Wno-unused-local-typedefs -std=gnu++11 -D_POSIX_MT_&lt;/li&gt;
+  &lt;li&gt;配置选项: 无&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;测试项&lt;/th&gt;
+      &lt;th&gt;连接数&lt;/th&gt;
+      &lt;th&gt;包长度&lt;/th&gt;
+      &lt;th&gt;CPU消耗&lt;/th&gt;
+      &lt;th&gt;内存消耗&lt;/th&gt;
+      &lt;th&gt;吞吐量&lt;/th&gt;
+      &lt;th&gt;QPS&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+跨机器转发+ipv4&lt;/td&gt;
+      &lt;td&gt;2(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;16KB&lt;/td&gt;
+      &lt;td&gt;13%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;86.4MB/s&lt;/td&gt;
+      &lt;td&gt;5.4K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+跨机器转发+ipv4&lt;/td&gt;
+      &lt;td&gt;2(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;8KB&lt;/td&gt;
+      &lt;td&gt;13%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;96MB/s&lt;/td&gt;
+      &lt;td&gt;12K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+跨机器转发+ipv4&lt;/td&gt;
+      &lt;td&gt;2(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;4KB&lt;/td&gt;
+      &lt;td&gt;13%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;92MB/s&lt;/td&gt;
+      &lt;td&gt;23K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+跨机器转发+ipv4&lt;/td&gt;
+      &lt;td&gt;2(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;2KB&lt;/td&gt;
+      &lt;td&gt;15%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;88MB/s&lt;/td&gt;
+      &lt;td&gt;44K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+跨机器转发+ipv4&lt;/td&gt;
+      &lt;td&gt;2(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;1KB&lt;/td&gt;
+      &lt;td&gt;16%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;82MB/s&lt;/td&gt;
+      &lt;td&gt;82K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+跨机器转发+ipv4&lt;/td&gt;
+      &lt;td&gt;2(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;512字节&lt;/td&gt;
+      &lt;td&gt;22%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;79.5MB/s&lt;/td&gt;
+      &lt;td&gt;159K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+跨机器转发+ipv4&lt;/td&gt;
+      &lt;td&gt;2(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;256字节&lt;/td&gt;
+      &lt;td&gt;33%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;73.5MB/s&lt;/td&gt;
+      &lt;td&gt;294K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+跨机器转发+ipv4&lt;/td&gt;
+      &lt;td&gt;2(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;128字节&lt;/td&gt;
+      &lt;td&gt;50%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;65.75MB/s&lt;/td&gt;
+      &lt;td&gt;526K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;3(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;32KB&lt;/td&gt;
+      &lt;td&gt;100%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;3.06GB/s&lt;/td&gt;
+      &lt;td&gt;98K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;3(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;16KB&lt;/td&gt;
+      &lt;td&gt;61%/71%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;1.59GB/s&lt;/td&gt;
+      &lt;td&gt;102K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;3(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;8KB&lt;/td&gt;
+      &lt;td&gt;36%/70%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;1.27GB/s&lt;/td&gt;
+      &lt;td&gt;163K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;3(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;4KB&lt;/td&gt;
+      &lt;td&gt;40%/73%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;1.30MB/s&lt;/td&gt;
+      &lt;td&gt;333K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;3(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;2KB&lt;/td&gt;
+      &lt;td&gt;43%/93%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;1.08GB/s&lt;/td&gt;
+      &lt;td&gt;556K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;3(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;1KB&lt;/td&gt;
+      &lt;td&gt;54%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;977MB/s&lt;/td&gt;
+      &lt;td&gt;1000K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;3(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;512字节&lt;/td&gt;
+      &lt;td&gt;44%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;610MB/s&lt;/td&gt;
+      &lt;td&gt;1250K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;3(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;256字节&lt;/td&gt;
+      &lt;td&gt;42%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;305MB/s&lt;/td&gt;
+      &lt;td&gt;1250K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;3(仅一个连接压力测试)&lt;/td&gt;
+      &lt;td&gt;128字节&lt;/td&gt;
+      &lt;td&gt;42%/100%&lt;/td&gt;
+      &lt;td&gt;280MB&lt;/td&gt;
+      &lt;td&gt;174MB/s&lt;/td&gt;
+      &lt;td&gt;1429K/s&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;由于测试tbus的时候有跨机器的，所以某些进程CPU跑不满也是正常情况。算上CPU的消耗比例，atbus的读性能和tbus对比的话，主要是&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;使用&lt;strong&gt;共享内存通道&lt;/strong&gt;的时候，读性能是差不多的，写性能atbus要高过tbus大约不到一倍。&lt;/li&gt;
+  &lt;li&gt;atbus能够&lt;strong&gt;收敛共享内存通道数量&lt;/strong&gt;，能大幅减少不必要的内存消耗。这个设计详见：&lt;a href=&quot;https://owent.net/gCsOx&quot;&gt;关于BUS通信系统的一些思考（二）&lt;/a&gt; 或 https://github.com/atframework/libatbus/tree/master/doc&lt;/li&gt;
+  &lt;li&gt;对于&lt;strong&gt;网络通道的大数据包&lt;/strong&gt;，读性能仍然是差不多。但是atbus的写性能大约是tbus的4-5倍，QPS大约是6-7倍。&lt;/li&gt;
+  &lt;li&gt;但是对于&lt;strong&gt;网络通道的小数据包&lt;/strong&gt;，读写都落后tbus很多&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;section-1&quot;&gt;优化分析&lt;/h2&gt;
+
+&lt;p&gt;然后因为我看不到tbus的源码，就只能是分析tbus的压力测试结果了。可以很明显的看到从大数据包到小数据包，tbus的整个吞吐量变化非常小，所以猜测tbus可能做了小包合并。&lt;/p&gt;
+
+&lt;p&gt;而且很明显在atbus里出现小包时，QPS上升的同时对uv_write调用的次数也变多了。我看了下libuv的源码，虽然它内部有做发送队列，但是每次pop front的时候还是会调用&lt;strong&gt;sendmsg&lt;/strong&gt;函数或&lt;strong&gt;write&lt;/strong&gt;函数，而这两个都是系统调用消耗很高的。&lt;/p&gt;
+
+&lt;p&gt;libuv内的代码大致如下:&lt;/p&gt;
+
+&lt;div class=&quot;language-c highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nl&quot;&gt;start:&lt;/span&gt;
+
+  &lt;span class=&quot;n&quot;&gt;assert&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;uv__stream_fd&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;stream&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+
+  &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;QUEUE_EMPTY&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;stream&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;write_queue&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;))&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+  &lt;span class=&quot;c1&quot;&gt;// 每次pop front一个发送项目
+&lt;/span&gt;  &lt;span class=&quot;n&quot;&gt;q&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;QUEUE_HEAD&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;stream&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;write_queue&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;req&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;QUEUE_DATA&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;q&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;uv_write_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;queue&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+  &lt;span class=&quot;n&quot;&gt;assert&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;req&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;handle&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;stream&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+
+  &lt;span class=&quot;c1&quot;&gt;// blablabla 好多代码 ...
+&lt;/span&gt;
+    &lt;span class=&quot;cm&quot;&gt;/* silence aliasing warning */&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;pv&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;CMSG_DATA&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;cmsg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+      &lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;pi&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;pv&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+      &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;pi&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fd_to_send&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;k&quot;&gt;do&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;n&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sendmsg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;uv__stream_fd&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;stream&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;msg&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;cp&quot;&gt;#if defined(__APPLE__)
+&lt;/span&gt;    &lt;span class=&quot;cm&quot;&gt;/*
+     * Due to a possible kernel bug at least in OS X 10.10 &quot;Yosemite&quot;,
+     * EPROTOTYPE can be returned while trying to write to a socket that is
+     * shutting down. If we retry the write, we should get the expected EPIPE
+     * instead.
+     */&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;while&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;n&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;errno&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;EINTR&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;||&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;errno&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;EPROTOTYPE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;));&lt;/span&gt;
+&lt;span class=&quot;cp&quot;&gt;#else
+&lt;/span&gt;    &lt;span class=&quot;k&quot;&gt;while&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;n&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;errno&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;EINTR&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;cp&quot;&gt;#endif
+&lt;/span&gt;  &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;else&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;do&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;iovcnt&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;n&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;write&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;uv__stream_fd&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;stream&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;iov&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;].&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;iov_base&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;iov&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;].&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;iov_len&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+      &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;else&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;n&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;writev&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;uv__stream_fd&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;stream&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;iov&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;iovcnt&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+      &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;cp&quot;&gt;#if defined(__APPLE__)
+&lt;/span&gt;    &lt;span class=&quot;cm&quot;&gt;/*
+     * Due to a possible kernel bug at least in OS X 10.10 &quot;Yosemite&quot;,
+     * EPROTOTYPE can be returned while trying to write to a socket that is
+     * shutting down. If we retry the write, we should get the expected EPIPE
+     * instead.
+     */&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;while&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;n&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;errno&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;EINTR&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;||&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;errno&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;EPROTOTYPE&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;));&lt;/span&gt;
+&lt;span class=&quot;cp&quot;&gt;#else
+&lt;/span&gt;    &lt;span class=&quot;k&quot;&gt;while&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;n&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;errno&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;EINTR&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;cp&quot;&gt;#endif
+&lt;/span&gt;  &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+  &lt;span class=&quot;c1&quot;&gt;// blablabla 好多代码 ...
+&lt;/span&gt;  &lt;span class=&quot;c1&quot;&gt;// 如果还有带发送数据并且fd处于writable状态，goto start
+&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;p&gt;那么优化方向就很明了了。合并小数据包呗。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-2&quot;&gt;优化实现&lt;/h2&gt;
+&lt;p&gt;合包的话最简单的就是在&lt;strong&gt;io_stream_send&lt;/strong&gt;里坐点手脚。原先这个函数每调用一次都会调用&lt;strong&gt;uv_write&lt;/strong&gt;。现在如果某个连接有数据正在发送，则需要先把要发送的数据保存下来，直接返回成功，然后发送完毕后对保存的数据做合包，然后再一起发送。&lt;br /&gt;
+然后如果发送时发现不能发送了，或者write失败，都要走以前的契约，那就是调用发送失败的回调。&lt;/p&gt;
+
+&lt;p&gt;起先我给atbus里的buffer_manager模块加了个merge_front和merge_back功能。实现非常复杂，但是写完之后转念一想，如果每次调用都使用merge的话，那岂不是如果要merge N个包，第一个包要copy N次？因为每次都要扩充缓冲区。&lt;br /&gt;
+我觉得这个消耗也是没有必要的，所以最终没用这个merge功能，而是采用了一个更简单的方法，定一个&lt;strong&gt;合包缓冲区&lt;/strong&gt;。&lt;/p&gt;
+
+&lt;p&gt;那么这个&lt;strong&gt;合包缓冲区&lt;/strong&gt;该是多大呢？也很简单，因为现在的每个connection的write队列里的数据块结构是write_req_t+4字节hash+动态长度int+数据包长度。&lt;br /&gt;
+那么缓冲区太大也没意义，我就设成了: 包大小限制(默认64K)-sizeof(write_req_t)-一个对齐大小（以防数据写乱，目前64位系统是8字节）。&lt;/p&gt;
+
+&lt;p&gt;缓冲区也没必要每个connection一个，可以每个线程一个。这个可以用TLS机制实现，方法上一篇文章（Android和IOS的TLS问题）里提到过了，这里不再复述。&lt;/p&gt;
+
+&lt;p&gt;然后每次写出时给connection加&lt;strong&gt;&lt;em&gt;WRITING&lt;/em&gt;&lt;/strong&gt;标记，写完的回调之后移除，如果调用&lt;strong&gt;io_stream_send&lt;/strong&gt;的时候有&lt;strong&gt;&lt;em&gt;WRITING&lt;/em&gt;&lt;/strong&gt;标记，则往write队列里加，但不执行实际写操作，如果没有就执行实际写操作。&lt;br /&gt;
+执行实际写操作的时候先合包，再写。这样就能保证正在写出的永远是write队列里的第一个数据块。&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;write队列怎么合包呢？&lt;/strong&gt;&lt;br /&gt;
+对于每个数据块而言，因为都包含了write_req_t，而且这个就是拿来放临时放数据的，并不会通过网络发送，所以可以移除被合包的数据块的这一部分，然后剩下的copy到一起即可。&lt;br /&gt;
+由于write队列的缓冲区有静态和动态两种模式，对于动态模式很容易处理，把可以合包的数据全部pop front，copy到&lt;strong&gt;合包缓冲区&lt;/strong&gt;，然后合并后的数据push front即可。如果push失败，那必然是内存不足了，这时候肯定就跪了，没啥好说的。整个逻辑都会出问题，不差这一块。&lt;br /&gt;
+而对于静态缓冲区而言就多一步操作，因为静态缓冲区是环形队列，那么头部和尾部的数据是不能合并的，否则可能缓冲区剩余空间不足。而因为先前pop front的总长度必然大于最后push front的合包后的数据长度，所以这个push一定成功。&lt;/p&gt;
+
+&lt;p&gt;再就是接收端，原先设置了512字节的接收缓冲区，也就是TCP发过来后会随机拆包黏包，所以接收队列空时，第一次一次性最多接收512字节。&lt;br /&gt;
+目前一个connection消耗大约480字节，再加上接收合包缓冲区。额外还会消耗一个智能指针的header block和一些额外的开销，原先大约每个connection占用1K多一点。&lt;br /&gt;
+我希望能多一些这个第一个包接收的量，因为在游戏服务器中，虽然大多数情况是小数据包，但是超过512字节还是比较容易的。我想总消耗控制在4K，这样的话这个接收缓冲区就设在了3K，当然这个是可以随时辩护调整的。&lt;br /&gt;
+每个连接4K意味着如果有2M的连接，会消耗8GB在这上面。当然如果真要搞到2M的连接数，连内核底层的tcp窗口的缓冲区也得改。这个缓冲区默认情况都远大于4K。&lt;/p&gt;
+
+&lt;p&gt;最后加的一个东西就是：&lt;strong&gt;write队列什么时候合包？&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;目前策略是当第一个包小于接收端的缓冲区的时候（也就是3KB）尝试合包，一方面考虑是再大合包的效果也不明显（我们前面大数据包的性能本身不差，瓶颈不是在系统调用上）。另一方面3KB也覆盖大多数数据包大小了。&lt;br /&gt;
+如果说这个参数不够好或者在一些特别的机器上需要大量连接且内存吃紧，也可以缩减这个值。&lt;/p&gt;
+
+&lt;h2 id=&quot;run-on-2016-07-07&quot;&gt;优化的成果 - Run On 2016-07-07&lt;/h2&gt;
+
+&lt;p&gt;配置选项有所变更:（变更项已经标出）&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;-DATBUS_MACRO_BUSID_TYPE=uint64_t&lt;/li&gt;
+  &lt;li&gt;-DATBUS_MACRO_CONNECTION_BACKLOG=128&lt;/li&gt;
+  &lt;li&gt;-DATBUS_MACRO_CONNECTION_CONFIRM_TIMEOUT=30&lt;/li&gt;
+  &lt;li&gt;-DATBUS_MACRO_DATA_ALIGN_TYPE=uint64_t&lt;/li&gt;
+  &lt;li&gt;-DATBUS_MACRO_DATA_NODE_SIZE=128&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;-DATBUS_MACRO_DATA_SMALL_SIZE=3072&lt;/strong&gt;&lt;/li&gt;
+  &lt;li&gt;-DATBUS_MACRO_HUGETLB_SIZE=4194304&lt;/li&gt;
+  &lt;li&gt;-DATBUS_MACRO_MSG_LIMIT=65536&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;测试项&lt;/th&gt;
+      &lt;th&gt;连接数&lt;/th&gt;
+      &lt;th&gt;包长度&lt;/th&gt;
+      &lt;th&gt;CPU消耗&lt;/th&gt;
+      &lt;th&gt;内存消耗&lt;/th&gt;
+      &lt;th&gt;吞吐量&lt;/th&gt;
+      &lt;th&gt;QPS&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+本地回环+ipv6+静态缓冲区&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;8-16384字节&lt;/td&gt;
+      &lt;td&gt;90%/100%&lt;/td&gt;
+      &lt;td&gt;5.8MB/24MB&lt;/td&gt;
+      &lt;td&gt;601MB/s&lt;/td&gt;
+      &lt;td&gt;95K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+本地回环+ipv6+静态缓冲区&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;8-128字节(模拟ping包)&lt;/td&gt;
+      &lt;td&gt;48%/100%&lt;/td&gt;
+      &lt;td&gt;5.8MB/27MB&lt;/td&gt;
+      &lt;td&gt;163MB/s&lt;/td&gt;
+      &lt;td&gt;2822K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+本地回环+ipv6+动态缓冲区(ptmalloc)&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;8-16384字节&lt;/td&gt;
+      &lt;td&gt;90%/100%&lt;/td&gt;
+      &lt;td&gt;5.8MB/24MB&lt;/td&gt;
+      &lt;td&gt;607MB/s&lt;/td&gt;
+      &lt;td&gt;96K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+本地回环+ipv6+动态缓冲区(ptmalloc)&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;8-128字节(模拟ping包)&lt;/td&gt;
+      &lt;td&gt;48%/100%&lt;/td&gt;
+      &lt;td&gt;5.8MB/27MB&lt;/td&gt;
+      &lt;td&gt;165MB/s&lt;/td&gt;
+      &lt;td&gt;2857K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;8-16384字节&lt;/td&gt;
+      &lt;td&gt;98%/98%&lt;/td&gt;
+      &lt;td&gt;74MB/74MB&lt;/td&gt;
+      &lt;td&gt;1.56GB/s&lt;/td&gt;
+      &lt;td&gt;199K/s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Linux+共享内存&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;8-128字节(模拟ping包)&lt;/td&gt;
+      &lt;td&gt;100%/83%&lt;/td&gt;
+      &lt;td&gt;74MB/74MB&lt;/td&gt;
+      &lt;td&gt;303MB/s&lt;/td&gt;
+      &lt;td&gt;5253K/s&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;由于没改动共享内存通道的任何代码，所以共享内存的后两项性能测试没有重新跑。&lt;br /&gt;
+这个结果可以看到，成果也相当明显，现在对小数据包也能有相当不错的QPS（282w/s）。接收性能和tbus类似，发送性能已经各方面远超tbus了。&lt;/p&gt;
+
+&lt;p&gt;这次的优化也就到此结束。最终的Benchmark见： https://github.com/atframework/libatbus/blob/master/doc/Benchmark.md&lt;/p&gt;
+
+&lt;h2 id=&quot;section-3&quot;&gt;另一个小优化&lt;/h2&gt;
+&lt;p&gt;其实这次单元测试之前有几次测试，但是感觉性能很有问题。即便共享内存的吞吐量也只有300MB/s。这显然很不正常，后来用valgrind做了下cpu profile，发现90%的CPU耗费在计算数据块的hash值上。&lt;br /&gt;
+因为atbus里所有类型的通道都会有催数据做hash而后校验。而这个hash最早是我自己乱搞的一个很简单的算法，很容易碰撞，后来为了严谨一些则换成了CRC32和CRC64。而替换之前是没有这个问题的。&lt;br /&gt;
+问题就在于这里，使用map方式实现的&lt;strong&gt;CRC32和CRC64性能太差了&lt;/strong&gt;。我还不清楚具体的原因，不过猜测可能和CPU命中率有关。&lt;/p&gt;
+
+&lt;p&gt;后来看了下&lt;a href=&quot;http://www.canonware.com/jemalloc/&quot;&gt;jemalloc&lt;/a&gt;的源码，里面用了&lt;a href=&quot;https://github.com/aappleby/smhasher&quot;&gt;MurmurHash&lt;/a&gt; V3算法。所以我也去这里copy了这个算法过来。性能瞬间的提上来了。这个改动很小就不详细说明了，具体可以看这个: https://github.com/atframework/atframe_utils/blob/master/src/algorithm/murmur_hash.cpp&lt;/p&gt;</content><category term="libatbus" /><category term="cxx" /><category term="bus" /><category term="rpc" /><category term="cpp" /><category term="c++" /><summary></summary></entry><entry><title>boost.context-1.61版本的设计模型变化</title><link href="/article/2016-06-14/boost.context-1.61-design_change.html" rel="alternate" type="text/html" title="boost.context-1.61版本的设计模型变化" /><published>2016-06-14T00:00:00+08:00</published><updated>2016-06-14T00:00:00+08:00</updated><id>/article/2016-06-14/boost.context-1.61-design_change</id><content type="html" xml:base="/article/2016-06-14/boost.context-1.61-design_change.html">&lt;nav class=&quot;toc&quot;&gt;
+&lt;ul id=&quot;markdown-toc&quot;&gt;
+  &lt;li&gt;&lt;a href=&quot;#section&quot; id=&quot;markdown-toc-section&quot;&gt;前言&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-1&quot; id=&quot;markdown-toc-section-1&quot;&gt;设计模型变化&lt;/a&gt;    &lt;ul&gt;
+      &lt;li&gt;&lt;a href=&quot;#api&quot; id=&quot;markdown-toc-api&quot;&gt;API变化&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-2&quot; id=&quot;markdown-toc-section-2&quot;&gt;流程变化&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-3&quot; id=&quot;markdown-toc-section-3&quot;&gt;向前兼容&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#executioncontextv2&quot; id=&quot;markdown-toc-executioncontextv2&quot;&gt;execution_context_v2&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-4&quot; id=&quot;markdown-toc-section-4&quot;&gt;存在的问题&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-5&quot; id=&quot;markdown-toc-section-5&quot;&gt;其他不是很重要的变化&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#libcopp&quot; id=&quot;markdown-toc-libcopp&quot;&gt;libcopp的修订&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;/nav&gt;
+
+&lt;h2 id=&quot;section&quot;&gt;前言&lt;/h2&gt;
+&lt;p&gt;之前写了个C++的协程框架&lt;a href=&quot;https://github.com/owt5008137/libcopp&quot;&gt;libcopp&lt;/a&gt;，底层使用的是boost.context实现，然后剥离了对boost的依赖。然而这样意味着我必须时常跟进&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/index.html&quot;&gt;boost.context&lt;/a&gt;的更新。&lt;/p&gt;
+
+&lt;p&gt;顺带提一下这个协程库已经在我们线上服务器版本中使用了。&lt;/p&gt;
+
+&lt;p&gt;从最初的boost版本（我忘了从哪个版本开始了）一直到1.60版本，&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/index.html&quot;&gt;boost.context&lt;/a&gt;的变化都不大，都只是补全一些新的架构和体系结构，还有就是修复一些小细节的BUG，再就是增加了对valgrind的支持（之前写过一个&lt;a href=&quot;//owent.net/?p=1194&quot;&gt;Merge记录&lt;/a&gt;提到过）。新增的功能也只有&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv1.html&quot;&gt;execution_context&lt;/a&gt;(现在叫execution_context_v1)，这个东西我的&lt;a href=&quot;https://github.com/owt5008137/libcopp&quot;&gt;libcopp&lt;/a&gt;里其实包含了这个功能，并且本身做得比它要功能丰富，所以没有接入的必要。另外在1.60版本的时候尝试使用Windows里的fiber（当然默认是关闭的），在1.61版本里被移除了。这些细节都不是特别重要，主要还是1.61版本的变化。&lt;/p&gt;
+
+&lt;p&gt;然而这次变化就比较大了，首先所有的API都变更了，汇编代码里的参数和返回值也都发生了变化，当然语义也不一样了，另外还增加了新的API&lt;strong&gt;ontop_fcontext&lt;/strong&gt;。这些变化使得&lt;a href=&quot;https://github.com/owt5008137/libcopp&quot;&gt;libcopp&lt;/a&gt;的逻辑关系也必须有一些相应的调整，为了理清思路，这些都在后面分析。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-1&quot;&gt;设计模型变化&lt;/h2&gt;
+
+&lt;h3 id=&quot;api&quot;&gt;API变化&lt;/h3&gt;
+
+&lt;p&gt;先来看看原先的底层API&lt;/p&gt;
+
+&lt;div class=&quot;language-cpp highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;namespace&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;boost&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;namespace&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;context&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+
+&lt;span class=&quot;cm&quot;&gt;/**
+ * @biref 执行环境上下文
+ */&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;typedef&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+&lt;span class=&quot;cm&quot;&gt;/**
+ * @biref 跳转到目标上下文
+ * @param ofc 当前的上下文会保存到ofc中
+ * @param nfc 跳转到的目标上下文
+ * @param vp 如果是第一次跳转，作为函数参数传入，如果是调回到jump_fcontext，这个是返回值
+ * @param preserve_fpu 是否复制FPU（浮点数寄存器）数据
+ * @return 如果调回时的透传参数
+ */&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;extern&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;C&quot;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_DECL&lt;/span&gt;
+&lt;span class=&quot;kt&quot;&gt;intptr_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_CALLDECL&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;jump_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ofc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;nfc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+                                               &lt;span class=&quot;kt&quot;&gt;intptr_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;vp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;bool&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;preserve_fpu&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+
+&lt;span class=&quot;cm&quot;&gt;/**
+ * @biref 初始化执行环境上下文
+ * @param sp 栈空间地址
+ * @param size 栈空间的大小
+ * @param fn 入口函数
+ * @return 返回初始化完成后的执行环境上下文
+ */&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;extern&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;C&quot;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_DECL&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_CALLDECL&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;make_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;size_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;size&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)(&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;intptr_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+
+&lt;span class=&quot;p&quot;&gt;}}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;p&gt;然后是现在的API&lt;/p&gt;
+
+&lt;div class=&quot;language-cpp highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;namespace&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;boost&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;namespace&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;context&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+
+&lt;span class=&quot;cm&quot;&gt;/**
+ * @biref 执行环境上下文
+ */&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;typedef&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+&lt;span class=&quot;cm&quot;&gt;/**
+ * @biref 跳转到目标上下文
+ * @param ofc 当前的上下文会保存到ofc中
+ * @param nfc 跳转到的目标上下文
+ * @param vp 跳转到的目标上下文的附加参数。如果是第一次跳转，作为函数参数传入，如果是调回到jump_fcontext，这个是返回值
+ * @param preserve_fpu 是否复制FPU（浮点数寄存器）数据
+ * @return 如果调回时的透传参数
+ */&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;extern&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;C&quot;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_DECL&lt;/span&gt;
+&lt;span class=&quot;kt&quot;&gt;intptr_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_CALLDECL&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;jump_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ofc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;nfc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+                                               &lt;span class=&quot;kt&quot;&gt;intptr_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;vp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;bool&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;preserve_fpu&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+
+&lt;span class=&quot;cm&quot;&gt;/**
+ * @biref 初始化执行环境上下文
+ * @param sp 栈空间地址
+ * @param size 栈空间的大小
+ * @param fn 入口函数
+ * @return 返回初始化完成后的执行环境上下文
+ */&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;extern&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;C&quot;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_DECL&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_CALLDECL&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;make_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;size_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;size&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)(&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;intptr_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+
+&lt;span class=&quot;p&quot;&gt;}}&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;namespace&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;boost&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;namespace&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;context&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;namespace&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;detail&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+
+&lt;span class=&quot;cm&quot;&gt;/**
+ * @biref 执行环境上下文
+ */&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;typedef&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+&lt;span class=&quot;cm&quot;&gt;/**
+ * @biref 事件参数包装
+ */&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;struct&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt;  &lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;/** 相关的的执行环境上下文-不同的API里含义不一样 **/&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt;    &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;/** 自定义数据 **/&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+
+&lt;span class=&quot;cm&quot;&gt;/**
+ * @biref 跳转到目标上下文
+ * @param to 当前的上下文会保存到ofc中
+ * @param vp 跳转到的目标上下文的附加参数，会设置为transfer_t里的data成员
+ * @return 跳转来源
+ */&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;extern&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;C&quot;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_DECL&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_CALLDECL&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;jump_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;to&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;vp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+
+&lt;span class=&quot;cm&quot;&gt;/**
+ * @biref 初始化执行环境上下文
+ * @param sp 栈空间地址
+ * @param size 栈空间的大小
+ * @param fn 入口函数
+ * @return 返回初始化完成后的执行环境上下文
+ */&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;extern&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;C&quot;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_DECL&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_CALLDECL&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;make_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;size_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;size&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+
+&lt;span class=&quot;cm&quot;&gt;/**
+ * @biref 顶层跳转
+ * @param to 当前的上下文会保存到ofc中
+ * @param vp 跳转到的目标上下文的附加参数，会设置为transfer_t里的data成员
+ * @param fn 入口函数，参数是跳转来源
+ * @return 跳转来源
+ */&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;// based on an idea of Giovanni Derreta
+&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;extern&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;C&quot;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_DECL&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;BOOST_CONTEXT_CALLDECL&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ontop_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;to&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;vp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+
+&lt;span class=&quot;p&quot;&gt;}}}&lt;/span&gt;
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h3 id=&quot;section-2&quot;&gt;流程变化&lt;/h3&gt;
+
+&lt;p&gt;诸如命名空间从boost转移到boost::detail这种废话我就不说了，这也是说作者不再希望用户直接使用这些接口了。然而这挡不住我非要直接用，哈哈。&lt;/p&gt;
+
+&lt;p&gt;重要的是首先API参数和返回值变化，对于这些接口变更，boost里并没有文档，也没有什么地方有说明，所以目前我只能通过它的单元测试和sample来评估功能。&lt;/p&gt;
+
+&lt;p&gt;首先重要的是多一个&lt;strong&gt;transfer_t&lt;/strong&gt;，这个里面的有两个对象，第一个&lt;em&gt;fctx&lt;/em&gt;是来源的执行上下文，第二个&lt;em&gt;data&lt;/em&gt;是各种接口传入的自定义的指针(上面接口里的&lt;em&gt;vp&lt;/em&gt;)。&lt;br /&gt;
+来源的上下文指的是从什么位置跳转过来的。无论在回调参数还是各项返回值中都是这个含义。&lt;/p&gt;
+
+&lt;p&gt;对于&lt;strong&gt;make_fcontext&lt;/strong&gt;这个接口，原先的入口函数是void (* fn)( intptr_t)，参数是透传自定义指针。现在是void (* fn)( transfer_t)，里面包含了来源执行栈的上下文和透传的自定义指针。&lt;/p&gt;
+
+&lt;p&gt;对于&lt;strong&gt;jump_fcontext&lt;/strong&gt;这个接口，原先需要传入把当前执行上下文保存到哪里，跳转目标的新的上下文，自定义数据和是否复制FPU。&lt;br /&gt;
+现在的版本不再需要指定是否需要复制FPU了，同时也去除了自动保存当前上下文的功能，并且改成了跳到新的上下文后，新的上下文可以知道自己是从哪跳转过来的。&lt;/p&gt;
+
+&lt;p&gt;简单得说，原来比较像POSIX的&lt;a href=&quot;http://linux.die.net/man/3/makecontext&quot;&gt;makecontext&lt;/a&gt;和&lt;a href=&quot;http://linux.die.net/man/3/swapcontext&quot;&gt;swapcontext&lt;/a&gt;，现在做得事情更少了，功能拆分得更细，那么有些功能就得使用者来写。&lt;/p&gt;
+
+&lt;p&gt;另外，这次的&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/index.html&quot;&gt;boost.context&lt;/a&gt;新增了一个比较有意思的接口，&lt;strong&gt;transfer_t ontop_fcontext( fcontext_t const to, void * vp, transfer_t (* fn)( transfer_t) )&lt;/strong&gt;。&lt;br /&gt;
+这个接口的功能是在跳转目标(&lt;em&gt;to&lt;/em&gt;指向的上下文)上模拟函数调用，并且返回值作为&lt;strong&gt;jump_fcontext&lt;/strong&gt;的返回值，相当于可以给执行上下文接口打hook。举个例子：&lt;/p&gt;
+
+&lt;div class=&quot;language-cpp highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;
+&lt;span class=&quot;c1&quot;&gt;// Step 1. 当前处于执行上下文-fctx1
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;jump_res&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;jump_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+
+&lt;span class=&quot;c1&quot;&gt;// ...
+// Step 2. 当前处于执行上下文-fctx2
+// 跳入ontop_callback函数
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;ontop_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x01&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ontop_callback&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+
+&lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;ontop_callback&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;from&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// 这时候 from.fctx == fctx2, from.data == 0x01
+&lt;/span&gt;    &lt;span class=&quot;c1&quot;&gt;// Step 3. 可以改变这些数据
+&lt;/span&gt;    &lt;span class=&quot;n&quot;&gt;from&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mh&quot;&gt;0x02&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;from&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;c1&quot;&gt;// 这时候返回Step 1的
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;jump_res&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;jump_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;// Step 4. 这时候，jump_res.fctx == fctx2, from.data == 0x02
+// continue other ...
+&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;这个功能比较有意思，&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv2.html&quot;&gt;&lt;em&gt;execution_context_v2&lt;/em&gt;&lt;/a&gt;里也使用它来完成初始化和跳转后的数据预处理。不过目前&lt;a href=&quot;https://github.com/owt5008137/libcopp&quot;&gt;libcopp&lt;/a&gt;还没有地方需要用到它，以后有时间再想想这玩意在什么情况下需要用到，然后再加接口。&lt;/p&gt;
+
+&lt;h3 id=&quot;section-3&quot;&gt;向前兼容&lt;/h3&gt;
+
+&lt;p&gt;新的API不再像老的一样，跳转后会自动保存原来的上下文。所以在兼容之前的使用方法的时候，就需要手动来保存一下。&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/index.html&quot;&gt;boost.context&lt;/a&gt;是使用了一个新的对象来记录调用者信息&lt;/p&gt;
+
+&lt;div class=&quot;language-cpp highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;struct&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data_t&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;activation_record&lt;/span&gt;   &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;from&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt;                &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;那么&lt;em&gt;jump_fcontext&lt;/em&gt;和&lt;em&gt;ontop_fcontext&lt;/em&gt;的&lt;em&gt;vp&lt;/em&gt;参数都是data_t*，然后每次跳入后保存调用来源的上下文&lt;/p&gt;
+
+&lt;div class=&quot;language-cpp highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;c1&quot;&gt;// ========== 调用jump_fcontext ==========
+// store current activation record in local variable
+&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;auto&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;from&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;current_rec&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;();&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// 这是一个TLS变量记录当前执行环境上下文
+// store `this` in static, thread local pointer
+// `this` will become the active (running) context
+// returned by execution_context::current()
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;current_rec&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// 更新当前执行环境上下文
+// 这一段是对GCC动态栈的支持
+&lt;/span&gt;&lt;span class=&quot;cp&quot;&gt;#if defined(BOOST_USE_SEGMENTED_STACKS)
+&lt;/span&gt;&lt;span class=&quot;c1&quot;&gt;// adjust segmented stack properties
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;__splitstack_getcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;from&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;sctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;segments_ctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;__splitstack_setcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;segments_ctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;cp&quot;&gt;#endif
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;d&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;from&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;vp&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// vp 是外部传入的private data
+// context switch from parent context to `this`-context
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;jump_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;d&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;data_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dp&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;reinterpret_cast&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;dp&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;from&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// 保存来源上下文
+&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;// ========== 通过jump_fcontext第一次跳入 ==========
+// tampoline function
+// entered if the execution context
+// is resumed for the first time
+&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;template&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;typename&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;AR&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;static&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;entry_func&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;detail&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;noexcept&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;detail&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dp&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;reinterpret_cast&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;detail&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;AR&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ar&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;static_cast&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;AR&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dp&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;BOOST_ASSERT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ar&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;dp&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;from&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// 保存来源上下文
+&lt;/span&gt;    &lt;span class=&quot;c1&quot;&gt;// start execution of toplevel context-function
+&lt;/span&gt;    &lt;span class=&quot;n&quot;&gt;ar&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;run&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;();&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;c1&quot;&gt;// ========== 调用ontop_fcontext ==========
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tuple&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;p&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;forward_as_tuple&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;data_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;d&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;from&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;p&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;// context switch from parent context to `this`-context
+// execute Fn( Tpl) on top of `this`
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ontop_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;d&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;context_ontop&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;data_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dp&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;reinterpret_cast&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;dp&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;from&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// 保存来源上下文
+&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;// ========== 通过ontop_fcontext跳入 ==========
+&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;template&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;typename&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;context_ontop&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;data_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dp&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;reinterpret_cast&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;dp&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;from&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// 保存来源上下文
+&lt;/span&gt;    &lt;span class=&quot;k&quot;&gt;auto&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tpl&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;reinterpret_cast&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tuple&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dp&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;BOOST_ASSERT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tpl&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;auto&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tpl&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;typename&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;decay&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;type&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;forward&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tpl&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;dp&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;apply&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tie&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dp&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;p&gt;看上面的代码，基本上向前兼容的方法就是新搞一个data_t数据记录来源的&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv1.html&quot;&gt;&lt;em&gt;execution_context&lt;/em&gt;&lt;/a&gt;的信息，透传过去后再把老的上下文保存进度。&lt;br /&gt;
+并且这么做之后，由于要有方式获取正在进行的上下文是哪一个，它有个记录当前执行上下文的TLS变量就变成了关键的东西。而这个TLS变量的问题后面会再提到。&lt;/p&gt;
+
+&lt;h3 id=&quot;executioncontextv2&quot;&gt;execution_context_v2&lt;/h3&gt;
+
+&lt;p&gt;新的boost.context提供了一个新版本的&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv2.html&quot;&gt;&lt;em&gt;execution_context&lt;/em&gt;&lt;/a&gt;对象，它其实是针对新的设计模型的一个执行上下文的抽象，并且粒度比以前的更小。所以你可以看到在性能比较的页面里v2版本的性能远高于v1。&lt;br /&gt;
+实际上性能高的原因是&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv1.html&quot;&gt;execution_context_v1&lt;/a&gt;提供了有限的&lt;a href=&quot;https://github.com/owt5008137/libcopp&quot;&gt;libcopp&lt;/a&gt;中coroutine提供的一部分功能，而&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv2.html&quot;&gt;&lt;em&gt;execution_context_v2&lt;/em&gt;&lt;/a&gt;则是把这些功能拆分地力度更小，作为其他模块的组件的时候更灵活。&lt;br /&gt;
+如果要使用&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv2.html&quot;&gt;&lt;em&gt;execution_context_v2&lt;/em&gt;&lt;/a&gt;的话，一些&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv1.html&quot;&gt;execution_context_v1&lt;/a&gt;处理的问题还是必须上层框架再处理，所以单纯地比较切换速度意义不大。&lt;/p&gt;
+
+&lt;p&gt;另外新的&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv2.html&quot;&gt;&lt;em&gt;execution_context_v2&lt;/em&gt;&lt;/a&gt;更大规模地使用了C++11的特性，比如noexpect，右值，转移语义等等，用于提升性能。核心代码如下：&lt;/p&gt;
+
+&lt;div class=&quot;language-cpp highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;
+&lt;span class=&quot;cm&quot;&gt;/** 参数包装 **/&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;typedef&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tuple&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Args&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;...&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;     &lt;span class=&quot;n&quot;&gt;args_tpl_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;cm&quot;&gt;/** 返回值包装 **/&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;typedef&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tuple&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;execution_context&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;typename&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;decay&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Args&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;type&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;...&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;               &lt;span class=&quot;n&quot;&gt;ret_tpl_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+&lt;span class=&quot;cm&quot;&gt;/** 用于记录栈地址，入口函数和参数的对象 **/&lt;/span&gt;
+&lt;span class=&quot;k&quot;&gt;typedef&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;record&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Ctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;StackAlloc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Params&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;...&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;  &lt;span class=&quot;n&quot;&gt;record_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+&lt;span class=&quot;c1&quot;&gt;// ========== 调用jump_fcontext - context_create函数内 ==========
+// create fast-context
+&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fcontext_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;make_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;size&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;context_entry&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;record_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;BOOST_ASSERT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;// placment new for control structure on context-stack
+&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;auto&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rec&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;sp&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;record_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;sctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;salloc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;forward&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;forward&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Params&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;params&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;...&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+&lt;span class=&quot;c1&quot;&gt;// transfer control structure to context-stack
+&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;jump_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rec&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+
+&lt;span class=&quot;c1&quot;&gt;// ========== 调用jump_fcontext - ret_tpl_t operator()( Args ... args)函数内 ==========
+&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;ret_tpl_t&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;operator&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Args&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;...&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;args&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;BOOST_ASSERT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fctx_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;args_tpl_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;forward&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Args&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;args&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;...&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;detail&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;detail&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;jump_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;detail&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;exchange&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fctx_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;move&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;static_cast&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;args_tpl_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tuple_cat&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;forward_as_tuple&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;execution_context&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;move&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;c1&quot;&gt;// ========== 通过jump_fcontext第一次跳入 ==========
+&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;template&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;typename&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Rec&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;context_entry&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;noexcept&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// transfer control structure to the context-stack
+&lt;/span&gt;    &lt;span class=&quot;n&quot;&gt;Rec&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rec&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;static_cast&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Rec&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;BOOST_ASSERT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rec&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;try&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;c1&quot;&gt;// jump back to `context_create()`
+&lt;/span&gt;        &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;jump_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+        &lt;span class=&quot;c1&quot;&gt;// start executing
+&lt;/span&gt;        &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rec&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;run&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;catch&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;forced_unwind&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;const&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;BOOST_ASSERT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// destroy context-stack of `this`context on next context
+&lt;/span&gt;    &lt;span class=&quot;n&quot;&gt;ontop_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rec&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;context_exit&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Rec&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;BOOST_ASSERT_MSG&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;context already terminated&quot;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;c1&quot;&gt;// ========== 调用ontop_fcontext ==========
+&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;template&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;typename&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;ret_tpl_t&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;operator&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;exec_ontop_arg_t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Args&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;...&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;args&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;BOOST_ASSERT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fctx_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;args_tpl_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;forward&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Args&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;args&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;...&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;auto&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;p&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;make_tuple&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;move&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;       &lt;span class=&quot;c1&quot;&gt;// 透传类型是 std::tuple&amp;lt;Fn, args_tpl_t&amp;gt;
+&lt;/span&gt;    &lt;span class=&quot;n&quot;&gt;detail&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;detail&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;ontop_fcontext&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;
+            &lt;span class=&quot;n&quot;&gt;detail&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;exchange&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fctx_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt;              &lt;span class=&quot;c1&quot;&gt;// 跳入fctx_并把fctx_置空
+&lt;/span&gt;            &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;p&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+            &lt;span class=&quot;n&quot;&gt;detail&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;context_ontop&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;execution_context&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Args&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;...&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;move&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;static_cast&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;args_tpl_t&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tuple_cat&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;forward_as_tuple&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;execution_context&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;move&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+
+&lt;span class=&quot;c1&quot;&gt;// ========== 通过ontop_fcontext跳入 ==========
+&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;template&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;typename&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Ctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;typename&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;typename&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;...&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Args&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;
+&lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;context_ontop&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;transfer_t&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;auto&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tpl&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;static_cast&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tuple&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tuple&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Args&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;...&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;data&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;BOOST_ASSERT&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tpl&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;typename&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;decay&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;type&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;forward&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Fn&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tpl&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;auto&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;args&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;move&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tpl&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;Ctx&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;t&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// execute function
+&lt;/span&gt;    &lt;span class=&quot;k&quot;&gt;auto&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;result&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;apply&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;                                &lt;span class=&quot;c1&quot;&gt;// apply的作用是展开并调用fn函数： fn(ctx, unpack(args))
+&lt;/span&gt;            &lt;span class=&quot;n&quot;&gt;fn&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+            &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tuple_cat&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;
+                &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;forward_as_tuple&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;move&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;),&lt;/span&gt;
+                &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;move&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;args&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;ctx&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;move&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;result&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;c1&quot;&gt;// apply returned data
+&lt;/span&gt;    &lt;span class=&quot;n&quot;&gt;detail&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;tail&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;args&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;move&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;result&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tpl&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;move&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;args&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;exchange&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ctx&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fctx_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;nullptr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;),&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;std&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;get&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;tpl&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;
+&lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+
+&lt;h2 id=&quot;section-4&quot;&gt;存在的问题&lt;/h2&gt;
+&lt;p&gt;我是不建议使用&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/index.html&quot;&gt;boost.context&lt;/a&gt;的execution_context的。因为首先&lt;a href=&quot;https://github.com/owt5008137/libcopp&quot;&gt;libcopp&lt;/a&gt;本身处理了它完成的功能，虽然它用模板写得，但是本身有一些兼容性问题。&lt;/p&gt;
+
+&lt;p&gt;比如TLS的问题，因为默认的Android和IOS标准库不支持TLS，而它里面大量使用&lt;em&gt;thread_local&lt;/em&gt;关键字。首先不说非C++11的模式下没有这个关键字，即便有，在Android和IOS的默认标准库下也会link error。&lt;br /&gt;
+对于execution_context用TLS解决的问题，在&lt;a href=&quot;https://github.com/owt5008137/libcopp&quot;&gt;libcopp&lt;/a&gt;里也同时存在，并且我也没想到什么好办法去解决（用pthread_create_key并不是特别理想），所以我现在的做法是，至少Android和IOS下单线程可用，多线程不支持&lt;strong&gt;copp::this_XXX&lt;/strong&gt;功能。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-5&quot;&gt;其他不是很重要的变化&lt;/h2&gt;
+&lt;p&gt;这次的版本更新，&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/index.html&quot;&gt;boost.context&lt;/a&gt;也有一些非关键性的变更。之所以说非关键是因为这些东西可有可没有，即便没有的话自己实现也不困难。列举如下:&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;pooled_fixedsize_stack，现在&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/index.html&quot;&gt;boost.context&lt;/a&gt;自己提供了一个用于分配栈空间的内存池。内部使用了侵入式智能指针，反正&lt;a href=&quot;https://github.com/owt5008137/libcopp&quot;&gt;libcopp&lt;/a&gt;本身能够很容易实现这个，并且benchmark里本身就有使用预定内存池的例子，所以我认为这是非关键的功能。&lt;/li&gt;
+  &lt;li&gt;很多函数重新整理了一下，增加了noexpect/nothrow等。&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h2 id=&quot;libcopp&quot;&gt;libcopp的修订&lt;/h2&gt;
+&lt;p&gt;这次的merge，使用新的设计模型是必然的，但与此同时，我也会做一些细节的优化和调整。主要是下面几大块：&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;&lt;strong&gt;&lt;em&gt;优化&lt;/em&gt;&lt;/strong&gt; 原来使用spin lock来处理多线程保护，还是抽象出跨平台且比较简单的原子操作类吧。好多时候想用但是因为麻烦直接用了c++11的atomic，但是这货gcc 4.4里没有。&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;&lt;em&gt;更新&lt;/em&gt;&lt;/strong&gt; 接入新API，类似&lt;a href=&quot;http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv1.html&quot;&gt;execution_context_v1&lt;/a&gt;的方式定义一个新的&lt;strong&gt;POD&lt;/strong&gt;类型作为透传数据(必须是POD因为不会执行析构函数的)，跳转后处理保存来源的执行位置&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;&lt;em&gt;更新&lt;/em&gt;&lt;/strong&gt; 接入新API的话，跳转来源只能靠&lt;em&gt;this_coroutine&lt;/em&gt;提供了。原先是对多线程且不支持TLS的环境不能使用&lt;em&gt;this_coroutine&lt;/em&gt;，现在基础功能依赖它的话就必须保证其正确。那么计划是VC的话还是必须使用高版本（反正有社区版免费），GCC/Clang之流使用pthread处理TLS吧。&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;&lt;em&gt;优化&lt;/em&gt;&lt;/strong&gt; &lt;em&gt;coroutine&lt;/em&gt;增加private data，然后&lt;em&gt;this_task&lt;/em&gt;可以用&lt;em&gt;this_coroutine&lt;/em&gt;关联，不需要两个TLS变量了，这是之前设计的一处小失误。这样&lt;em&gt;task&lt;/em&gt;的多线程重入也可以用&lt;em&gt;coroutine&lt;/em&gt;的。&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;&lt;em&gt;更新&lt;/em&gt;&lt;/strong&gt; caller应该要变为每次入口函数后初始化和不是来自yield的jump_to后更新。基本上caller只需要记录fcontext（支持GCC动态栈的情况下还需要多复制一个动态执行栈的数据），作用也只有执行完成后跳回。如果不是调用yield导致返回的，则是外部主动调用resume，所以结束时也需要返回到主动调用的地方。&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;&lt;em&gt;更新&lt;/em&gt;&lt;/strong&gt; start内的jump_to只能通过this_XXX来获取来源协程，yield内的jump_to的来源就是this。每次jump_to返回后都要更新来源协程的callee&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;&lt;em&gt;更新&lt;/em&gt;&lt;/strong&gt; this_XXX功能应该是入口函数处设置和jump_to执行返回后刷新（不能由外层记录old，因为可能发生变化）。起新的协程和yield都会走jump_to，同样start内得设为jump_to前的this_XXX，而yield的直接设为this&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;&lt;em&gt;优化&lt;/em&gt;&lt;/strong&gt; 接入cmake的WriteCompilerDetectionHeader并和&lt;a href=&quot;https://github.com/atframework/atframe_utils&quot;&gt;atframe_utils&lt;/a&gt;保持一致，尽量加noexpect&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;&lt;em&gt;优化&lt;/em&gt;&lt;/strong&gt; 整理一下CI配置，同步&lt;a href=&quot;https://github.com/atframework/libatbus&quot;&gt;libatbus&lt;/a&gt;的CI配置&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;预计重构完成后性能不会有太大的改变，甚至因为更多地使用原子操作，可能导致性能还会变低一些。不过毕竟实际运用中并不需要经常做协程切换操作，而且逻辑的复杂度源超协程切换，所以关系不大。&lt;br /&gt;
+但是重构完后使用者更不容易出现错误，并且可以支持&lt;strong&gt;协程A跳转到协程B再跳转到协程A&lt;/strong&gt;这种循环跳转，还是值得的。具体由多大变化，还是等重构完后看测试结果吧。&lt;/p&gt;</content><category term="boost" /><category term="coroutine" /><category term="c++" /><category term="cpp" /><category term="cxx" /><summary></summary></entry><entry><title>理解Raft算法</title><link href="/article/2016-03-17/understand_raft.html" rel="alternate" type="text/html" title="理解Raft算法" /><published>2016-03-17T00:00:00+08:00</published><updated>2016-03-17T00:00:00+08:00</updated><id>/article/2016-03-17/understand_raft</id><content type="html" xml:base="/article/2016-03-17/understand_raft.html">&lt;nav class=&quot;toc&quot;&gt;
+&lt;ul id=&quot;markdown-toc&quot;&gt;
+  &lt;li&gt;&lt;a href=&quot;#section&quot; id=&quot;markdown-toc-section&quot;&gt;前言&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-1&quot; id=&quot;markdown-toc-section-1&quot;&gt;基本算法设计&lt;/a&gt;    &lt;ul&gt;
+      &lt;li&gt;&lt;a href=&quot;#appendentries-rpcrpc&quot; id=&quot;markdown-toc-appendentries-rpcrpc&quot;&gt;AppendEntries RPC（心跳、消息同步RPC）&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#requestvote-rpcrpc&quot; id=&quot;markdown-toc-requestvote-rpcrpc&quot;&gt;RequestVote RPC（竞选主节点RPC）&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-4&quot; id=&quot;markdown-toc-section-4&quot;&gt;服务器逻辑规则&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-6&quot; id=&quot;markdown-toc-section-6&quot;&gt;未提及的细节和一些思考&lt;/a&gt;    &lt;ul&gt;
+      &lt;li&gt;&lt;a href=&quot;#log&quot; id=&quot;markdown-toc-log&quot;&gt;主节点切换期间的消息（Log）处理&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-7&quot; id=&quot;markdown-toc-section-7&quot;&gt;补充内容&lt;/a&gt;    &lt;ul&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-8&quot; id=&quot;markdown-toc-section-8&quot;&gt;定时器&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-9&quot; id=&quot;markdown-toc-section-9&quot;&gt;扩容、缩容和故障转移&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-12&quot; id=&quot;markdown-toc-section-12&quot;&gt;客户端接入&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-16&quot; id=&quot;markdown-toc-section-16&quot;&gt;压缩数据&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#paxoshttpszhwikipediaorgzh-cnpaxose7ae97e6b395&quot; id=&quot;markdown-toc-paxoshttpszhwikipediaorgzh-cnpaxose7ae97e6b395&quot;&gt;与&lt;a href=&quot;https://zh.wikipedia.org/zh-cn/Paxos%E7%AE%97%E6%B3%95&quot;&gt;Paxos&lt;/a&gt;的差异&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-17&quot; id=&quot;markdown-toc-section-17&quot;&gt;应用层面的思考&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#rafthttpsraftgithubio&quot; id=&quot;markdown-toc-rafthttpsraftgithubio&quot;&gt;&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;的实现&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;/nav&gt;
+
+&lt;h2 id=&quot;section&quot;&gt;前言&lt;/h2&gt;
+
+&lt;p&gt;最近在分布式系统一致性方面，&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;算法比较火啊。所以就抽时间看了下这个算法。&lt;/p&gt;
+
+&lt;p&gt;之前已经有&lt;a href=&quot;https://zh.wikipedia.org/zh-cn/Paxos%E7%AE%97%E6%B3%95&quot;&gt;Paxos算法&lt;/a&gt;，用于解决分布式系统最终一致性问题，而且已经有了&lt;a href=&quot;http://http://zookeeper.apache.org/&quot;&gt;zookeeper&lt;/a&gt;这个成熟的开源实现。那么这个&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;算法有啥用呢？按照&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;官网的说法，这个算法的错误容忍和性能和&lt;a href=&quot;https://zh.wikipedia.org/zh-cn/Paxos%E7%AE%97%E6%B3%95&quot;&gt;Paxos算法&lt;/a&gt;类似，但是拥有更加简单易懂的设计。&lt;/p&gt;
+
+&lt;p&gt;看过&lt;a href=&quot;https://zh.wikipedia.org/zh-cn/Paxos%E7%AE%97%E6%B3%95&quot;&gt;Paxos算法&lt;/a&gt;的童鞋们都知道，这货复杂地和屎一样，为了实现去中心化而考虑了各种复杂的边界条件和时序下的可靠性。而&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;算法则根据实际应用中的需要，简化了设计模型，不采用去中心化设计，而是自动选举中心节点，并且在各种情况和时序下可以保证能够正确的选举出中心节点并保证数据的一致性。而且也正是由于能够选举出唯一的主节点（Leader）使得整个通信流程非常地简单，并且易于理解和维护。&lt;/p&gt;
+
+&lt;p&gt;那么它是如何做到这些的呢？&lt;/p&gt;
+
+&lt;h2 id=&quot;section-1&quot;&gt;基本算法设计&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;的基本设计可以参照官网介绍 https://raft.github.io/&lt;/p&gt;
+
+&lt;p&gt;官方网站上的图例可以点击节点，然后&lt;strong&gt;模拟&lt;/strong&gt;节点crash或者超时或者收到请求时的通信流程。其实也是一个javascript的简单实现，有利于我们理解&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;算法的流程。&lt;/p&gt;
+
+&lt;p&gt;另外还有一个基本要点的流程有点像PPT的东东也能帮助我们理解 http://thesecretlivesofdata.com/raft/&lt;/p&gt;
+
+&lt;p&gt;当然最完整的就是这篇Paper了，&lt;a href=&quot;http://ramcloud.stanford.edu/raft.pdf&quot;&gt;《In Search of an Understandable Consensus Algorithm (Extended Version)》&lt;/a&gt;。大体翻译提取下这篇论文里的核心内容吧。&lt;/p&gt;
+
+&lt;p&gt;基本思路是每个节点分为Leader、Follower、Candidate三个状态。&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;#leader&quot; name=&quot;leader&quot;&gt;&lt;strong&gt;Leader&lt;/strong&gt;&lt;/a&gt;: 主节点&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#follower&quot; name=&quot;follower&quot;&gt;&lt;strong&gt;Follower&lt;/strong&gt;&lt;/a&gt;: 从节点&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#candidate&quot; name=&quot;candidate&quot;&gt;&lt;strong&gt;Candidate&lt;/strong&gt;&lt;/a&gt;: 正在竞选主节点（参选节点）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;消息状态分为:&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;&lt;strong&gt;Uncommit&lt;/strong&gt;: 未提交转态（Client发到主节点，主节点还没有得到大多数从节点的提交回执）&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Commited&lt;/strong&gt;: 已提交转态（从节点收到主节点的消息提交，还未收到确认报文）&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Applied&lt;/strong&gt;: 已确认转态（从节点收到主节点的确认报文，或主节点已收到大多数从节点的提交回执）&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;所有的节点中都要记录以下信息&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;#term&quot; name=&quot;term&quot;&gt;&lt;strong&gt;CurrentTerm&lt;/strong&gt;&lt;/a&gt;: 节点的当前选举版本号（发起竞选主节点时要更新这个值），后面的&lt;strong&gt;Term&lt;/strong&gt;指代消息中的选举版本号或者生产&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;时的选举版本号&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#voted_for&quot; name=&quot;voted_for&quot;&gt;&lt;strong&gt;Voted For&lt;/strong&gt;&lt;/a&gt;: 主节点投票给谁&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#log&quot; name=&quot;log&quot;&gt;&lt;strong&gt;Log&lt;/strong&gt;&lt;/a&gt;: log是论文里的描述，其实也就是消息的内容，后面用&lt;strong&gt;&lt;em&gt;消息&lt;/em&gt;&lt;/strong&gt;指代这里提到的Log&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#commit_index&quot; name=&quot;commit_index&quot;&gt;&lt;strong&gt;Commit Index&lt;/strong&gt;&lt;/a&gt;: 提交序号（每次收到客户端消息时要更新这个值）&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#last_applied&quot; name=&quot;last_applied&quot;&gt;&lt;strong&gt;LastApplied&lt;/strong&gt;&lt;/a&gt;: 最后确认的消息序号&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;&lt;em&gt;下面是仅主节点需要记录的数据&lt;/em&gt;&lt;/strong&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#next_index&quot; name=&quot;next_index&quot;&gt;&lt;strong&gt;NextIndex[]&lt;/strong&gt;&lt;/a&gt;: 预估的每个从节点下一个的Log的序号（初始化为最后的log索引+1）&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#match_index&quot; name=&quot;match_index&quot;&gt;&lt;strong&gt;MatchIndex[]&lt;/strong&gt;&lt;/a&gt;: 已经确认的每个从节点的下一个Log的序号（初始化为0）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;RPC消息有两种：&lt;/p&gt;
+
+&lt;h3 id=&quot;appendentries-rpcrpc&quot;&gt;AppendEntries RPC（心跳、消息同步RPC）&lt;/h3&gt;
+
+&lt;h4 id=&quot;rpc&quot;&gt;RPC请求:&lt;/h4&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;参数&lt;/th&gt;
+      &lt;th&gt;描述&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Term&lt;/td&gt;
+      &lt;td&gt;主节点的&lt;a href=&quot;#term&quot;&gt;CurrentTerm&lt;/a&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;LeaderId&lt;/td&gt;
+      &lt;td&gt;主节点ID（更新到&lt;a href=&quot;#voted_for&quot;&gt;Voted For&lt;/a&gt;，用于通知客户端主节点是谁）&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;PrevLogIndex&lt;/td&gt;
+      &lt;td&gt;先前一次RPC请求的&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;PrevLogTerm&lt;/td&gt;
+      &lt;td&gt;先前一次RPC请求的&lt;a href=&quot;#term&quot;&gt;Term&lt;/a&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Entries&lt;/td&gt;
+      &lt;td&gt;&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;内容&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;LeaderCommit&lt;/td&gt;
+      &lt;td&gt;主节点的&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;h4 id=&quot;rpc-1&quot;&gt;RPC回复:&lt;/h4&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;参数&lt;/th&gt;
+      &lt;th&gt;描述&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Term&lt;/td&gt;
+      &lt;td&gt;从节点的&lt;strong&gt;CurrentTerm&lt;/strong&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Success(我认为这里用返回码更好)&lt;/td&gt;
+      &lt;td&gt;如果从节点的内容匹配&lt;strong&gt;PrevLogIndex&lt;/strong&gt;和&lt;strong&gt;PrevLogTerm&lt;/strong&gt;则返回成功&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;h4 id=&quot;section-2&quot;&gt;接收方判定条件&lt;/h4&gt;
+&lt;ol&gt;
+  &lt;li&gt;如果请求包内Term &amp;lt; &lt;a href=&quot;#term&quot;&gt;CurrentTerm&lt;/a&gt;，回复失败&lt;/li&gt;
+  &lt;li&gt;如果节点内不包含Term等于&lt;strong&gt;&lt;em&gt;PrevLogTerm&lt;/em&gt;&lt;/strong&gt;但&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;不等于&lt;strong&gt;&lt;em&gt;PrevLogIndex&lt;/em&gt;&lt;/strong&gt;的&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;，则回复失败&lt;/li&gt;
+  &lt;li&gt;如果存在&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;和拿到的请求包里的冲突（&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;相同但Term不同），则移除所有冲突之后的&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;，并用新的&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;覆盖&lt;/li&gt;
+  &lt;li&gt;如果&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;不在已有&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;集合中，追加数据&lt;/li&gt;
+  &lt;li&gt;如果&lt;strong&gt;&lt;em&gt;LeaderCommit&lt;/em&gt;&lt;/strong&gt;大于本地的&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;，&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;要设置成&lt;strong&gt;&lt;em&gt;LeaderCommit&lt;/em&gt;&lt;/strong&gt;和最后一条消息（&lt;strong&gt;&lt;em&gt;Entries&lt;/em&gt;&lt;/strong&gt;）的&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;里的最小值&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h3 id=&quot;requestvote-rpcrpc&quot;&gt;RequestVote RPC（竞选主节点RPC）&lt;/h3&gt;
+
+&lt;h4 id=&quot;rpc-2&quot;&gt;RPC请求:&lt;/h4&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;参数&lt;/th&gt;
+      &lt;th&gt;描述&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Term&lt;/td&gt;
+      &lt;td&gt;竞选节点的&lt;a href=&quot;#term&quot;&gt;CurrentTerm&lt;/a&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;CandidateId&lt;/td&gt;
+      &lt;td&gt;竞选节点ID（对应从节点&lt;a href=&quot;#voted_for&quot;&gt;Voted For&lt;/a&gt;）&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;LastLogIndex&lt;/td&gt;
+      &lt;td&gt;竞选的最后一条&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;LastLogTerm&lt;/td&gt;
+      &lt;td&gt;竞选的最后一条&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;&lt;a href=&quot;#term&quot;&gt;Term&lt;/a&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;h4 id=&quot;rpc-3&quot;&gt;RPC回复:&lt;/h4&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;参数&lt;/th&gt;
+      &lt;th&gt;描述&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;Term&lt;/td&gt;
+      &lt;td&gt;从节点的&lt;strong&gt;CurrentTerm&lt;/strong&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;VoteGranted (同样我认为这里用返回码更好)&lt;/td&gt;
+      &lt;td&gt;如果收到同意票，返回成功&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;h4 id=&quot;section-3&quot;&gt;接收方判定条件&lt;/h4&gt;
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;如果请求包内&lt;strong&gt;&lt;em&gt;LastLogTerm&lt;/em&gt;&lt;/strong&gt; &amp;lt;= &lt;a href=&quot;#term&quot;&gt;CurrentTerm&lt;/a&gt;，投否决票&lt;br /&gt;
+&amp;gt; 论文里写得是&lt;em&gt;小于&lt;/em&gt;，实际应该是&lt;em&gt;小于等于&lt;/em&gt;，实际测试也是小于等于。因为等于的情况包含，&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;已经投了一个同期的&lt;a href=&quot;#candidate&quot;&gt;参选节点&lt;/a&gt;，或者自己是&lt;a href=&quot;#candidate&quot;&gt;参选节点&lt;/a&gt;，收到一个同期的竞选消息。&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;如果&lt;a href=&quot;#voted_for&quot;&gt;Voted For&lt;/a&gt;是空的或者和&lt;strong&gt;&lt;em&gt;CandidateId&lt;/em&gt;&lt;/strong&gt;相等，则仅&lt;a href=&quot;#candidate&quot;&gt;参选节点&lt;/a&gt;的&lt;strong&gt;消息最新(up-to-date)&lt;/strong&gt;才投同意票&lt;br /&gt;
+&amp;gt; &lt;strong&gt;消息最新(up-to-date)&lt;/strong&gt;的判定方式是: 如果&lt;a href=&quot;#candidate&quot;&gt;参选节点&lt;/a&gt;的最后的&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;的&lt;a href=&quot;#term&quot;&gt;Term&lt;/a&gt;比投票者更大或者&lt;a href=&quot;#term&quot;&gt;Term&lt;/a&gt;相等且&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;大于等于投票节点的最后一个&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;。那么&lt;a href=&quot;#candidate&quot;&gt;参选节点&lt;/a&gt;的消息会被投票者认为是最新（只是相对于投票者更新）&lt;br /&gt;
+&amp;gt;&lt;br /&gt;
+&amp;gt; &lt;em&gt;PS: 这里我一开始认为是节点的&lt;a href=&quot;#term&quot;&gt;Term&lt;/a&gt;和&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;，导致后面的协商流程一直理解不了。但是这是实际上应该是最后一条&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;的&lt;a href=&quot;#term&quot;&gt;Term&lt;/a&gt;和&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;。&lt;/em&gt;&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h3 id=&quot;section-4&quot;&gt;服务器逻辑规则&lt;/h3&gt;
+
+&lt;h4 id=&quot;section-5&quot;&gt;所有服务器&lt;/h4&gt;
+&lt;ul&gt;
+  &lt;li&gt;如果&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt; &amp;gt; &lt;a href=&quot;#last_applied&quot;&gt;LastApplied&lt;/a&gt;，把所有大于&lt;a href=&quot;#last_applied&quot;&gt;LastApplied&lt;/a&gt;且未确认的消息转为确认状态，并且更新&lt;a href=&quot;#last_applied&quot;&gt;LastApplied&lt;/a&gt;到&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;如果RPC的传入的Term大于&lt;a href=&quot;#term&quot;&gt;CurrentTerm&lt;/a&gt;，更新&lt;a href=&quot;#term&quot;&gt;CurrentTerm&lt;/a&gt;到传入的Term值，并&lt;strong&gt;强制转为&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;####&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;回应所有来自&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;和&lt;a href=&quot;#candidate&quot;&gt;参选节点&lt;/a&gt;的RPC消息&lt;/li&gt;
+  &lt;li&gt;如果&lt;strong&gt;竞选超时&lt;/strong&gt;时间内没有收到&lt;strong&gt;AppendEntries RPC&lt;/strong&gt;或者没有成功的投票（可以是收到&lt;strong&gt;RequestVote RPC&lt;/strong&gt;但投反对票），则发起竞选请求（&lt;strong&gt;RequestVote RPC&lt;/strong&gt;）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;####&lt;a href=&quot;#candidate&quot;&gt;参选节点&lt;/a&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;转变为&lt;a href=&quot;#candidate&quot;&gt;参选节点&lt;/a&gt;时，开始选举过程
+    &lt;ol&gt;
+      &lt;li&gt;&lt;a href=&quot;#term&quot;&gt;CurrentTerm&lt;/a&gt; = &lt;a href=&quot;#term&quot;&gt;CurrentTerm&lt;/a&gt; + 1&lt;/li&gt;
+      &lt;li&gt;投票给自己&lt;/li&gt;
+      &lt;li&gt;重设（随机）&lt;strong&gt;竞选超时&lt;/strong&gt;定时器&lt;/li&gt;
+      &lt;li&gt;向所有节点发送竞选请求（&lt;strong&gt;RequestVote RPC&lt;/strong&gt;）&lt;/li&gt;
+    &lt;/ol&gt;
+  &lt;/li&gt;
+  &lt;li&gt;如果收到大多数的统一票，转变为&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;如果收到来自新&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;的&lt;strong&gt;AppendEntries RPC&lt;/strong&gt;，转变为&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;如果再一次&lt;strong&gt;竞选超时&lt;/strong&gt;，重新启动一轮选举，发起竞选请求（&lt;strong&gt;RequestVote RPC&lt;/strong&gt;）&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;####&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;竞选成功时立刻发送空的心跳包给所有其他节点。并且设置心跳定时器（时间间隔较短），重复这个过程&lt;/li&gt;
+  &lt;li&gt;收到来自客户端的消息以后，添加到本地&lt;a href=&quot;#log&quot;&gt;消息列表&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;如果最后一次&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;的&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;大于等于某个&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;的&lt;a href=&quot;#next_index&quot;&gt;NextIndex&lt;/a&gt;，发送&lt;strong&gt;AppendEntries RPC&lt;/strong&gt;，并附带从&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;的&lt;a href=&quot;#next_index&quot;&gt;NextIndex&lt;/a&gt;开始的所有消息
+    &lt;ul&gt;
+      &lt;li&gt;如果成功则更新相应&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;的&lt;a href=&quot;#next_index&quot;&gt;NextIndex&lt;/a&gt;和&lt;a href=&quot;#match_index&quot;&gt;MatchIndex&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;如果失败则是发生数据不一致，&lt;a href=&quot;#next_index&quot;&gt;NextIndex&lt;/a&gt; = &lt;a href=&quot;#next_index&quot;&gt;NextIndex&lt;/a&gt; - 1然后重试&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;如果存在N，满足N&amp;gt;&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;，并且大多数的&lt;a href=&quot;#match_index&quot;&gt;MatchIndex[i]&lt;/a&gt; &amp;gt;= N，并且Log[N].term == &lt;a href=&quot;#term&quot;&gt;CurrentTerm&lt;/a&gt;，设置&lt;a href=&quot;#term&quot;&gt;CurrentTerm&lt;/a&gt;=N&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;section-6&quot;&gt;未提及的细节和一些思考&lt;/h2&gt;
+
+&lt;p&gt;前文提到的各种情况和边界都可以使用&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;主页上的工具模拟出来，流程前面已经写得比较清楚了我就不复述了，只提出我认为比较重要的几个地方和论文里没详细说明的一些细节。&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;最重要的核心是用定时器和心跳包来同步数据和更新状态&lt;/li&gt;
+  &lt;li&gt;主节点只追加数据，不改写&lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;初始所有节点都是&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;，&lt;strong&gt;随机&lt;/strong&gt;取一个选举超时时间&lt;br /&gt;
+&amp;gt; 这样初始状态下很快就会进入竞选节点状态&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;strong&gt;竞选超时&lt;/strong&gt;时间只在初始化和每次发起竞选的时候随机，其他情况都是复用之前的超时时间。&lt;br /&gt;
+&amp;gt; 这样保证了发生冲突的时候，最终会有一个节点的&lt;strong&gt;竞选超时&lt;/strong&gt;比较短，而其他的随机后&lt;strong&gt;竞选超时&lt;/strong&gt;较长的节点在触发超时时间之前会收到RequestVote RPC（竞选主节点RPC），从而变为&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;&lt;br /&gt;
+&amp;gt;&lt;br /&gt;
+&amp;gt; 但是在节点数量特别多的时候我觉得也会出现一直没办法选举出主节点的情况，我的想法是再区分&lt;strong&gt;竞选超时&lt;/strong&gt;的定时器为两种，&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;的&lt;strong&gt;竞选超时&lt;/strong&gt;取值区间在一个比较大的值范围，而&lt;a href=&quot;#candidate&quot;&gt;参选节点&lt;/a&gt;的&lt;strong&gt;竞选超时&lt;/strong&gt;取值区间在一个比较小的值范围。这样能保证&lt;a href=&quot;#candidate&quot;&gt;参选节点&lt;/a&gt;的数量能够收敛，即&lt;a href=&quot;#candidate&quot;&gt;参选节点&lt;/a&gt;变为&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;后几乎不可能变回&lt;a href=&quot;#candidate&quot;&gt;参选节点&lt;/a&gt;&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;不同&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;的心跳定时器是分开计的，但是间隔是一样的（这是为了减少&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;转变为竞选状态的可能性）&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#next_index&quot;&gt;NextIndex&lt;/a&gt;和&lt;a href=&quot;#match_index&quot;&gt;MatchIndex&lt;/a&gt;的区别
+    &lt;ul&gt;
+      &lt;li&gt;&lt;a href=&quot;#next_index&quot;&gt;NextIndex&lt;/a&gt;记录可能的下一个Log序号，意味着可能不正确，比如新的&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;被选出来以后，会假设所有的&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;的数据最新，然后如果发RPC或者失败回复，才会确认该节点有部分数据未同步&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#match_index&quot;&gt;MatchIndex&lt;/a&gt;记录的是已经确认过该&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;已经获得的数据&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;注意节点数据里的&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;指的是主节点已经被大多数从节点确认的消息序号。也就意味着&lt;a href=&quot;#log&quot;&gt;消息列表&lt;/a&gt;里的提交索引可能高于这个值。（所以&lt;a href=&quot;#last_applied&quot;&gt;LastApplied&lt;/a&gt;并没什么卵用，完全可以优化掉，你看那个页面上的例子里就没有这个东西）&lt;/li&gt;
+  &lt;li&gt;这里的数据提交有一些比较有意思的细节
+    &lt;ol&gt;
+      &lt;li&gt;通知&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;确认消息并不需要立刻通知，下一次心跳带回去即可&lt;/li&gt;
+    &lt;/ol&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;一个小优化，心跳包失败的时候，可以通过&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;的回包里附带当前的&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;，从而减少&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;上&lt;a href=&quot;#next_index&quot;&gt;NextIndex&lt;/a&gt; - 1的操作，直接设为&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;的&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;然后同步所有差异&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;&lt;br /&gt;
+&amp;gt; 论文里也有提到这个小优化，但是作者认为很少会出现消息丢失和消息不一致的情况，所以可能这个优化的意义不大。&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;a href=&quot;#my_thk10&quot; name=&quot;my_thk10&quot;&gt;新的&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;绝不能确认之前未处理完的&lt;em&gt;已提交转态&lt;/em&gt;但未确认的消息（后面会再说明）&lt;/a&gt;&lt;br /&gt;
+&amp;gt; 即便确保了大部分&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;已经获取到了这些&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;也不能立即执行确认。必须使用另一种方式确认这些消息。&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;用快照来减少持续增长的日志数据（Chubby和Zookeeper也是用得快照）&lt;br /&gt;
+&amp;gt; 实际上我们能按照实际使用场景，使用类似&lt;a href=&quot;#http://redis.io/topics/persistence&quot;&gt;Redis的AOF&lt;/a&gt;方式做更好的优化&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h3 id=&quot;log&quot;&gt;主节点切换期间的消息（Log）处理&lt;/h3&gt;
+&lt;p&gt;前面提到&lt;a href=&quot;#my_thk10&quot;&gt;&lt;strong&gt;新的主节点绝不能确认之前未处理完的&lt;em&gt;已提交转态&lt;/em&gt;但未确认的消息&lt;/strong&gt;&lt;/a&gt;。这些消息主要指没有收到原先的&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;的&lt;a href=&quot;#commit_index&quot;&gt;CommitIndex&lt;/a&gt;的通知，然后自己成为了新&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;而导致之前的部分&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;没有被确认的情况。这时候可以确保的就是新选成功&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;之后，当前的&lt;a href=&quot;#term&quot;&gt;Term&lt;/a&gt;一定大于这些未确认的消息的&lt;a href=&quot;#term&quot;&gt;Term&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;论文&lt;em&gt;5.4.2节+图8&lt;/em&gt;有讨论了一种比较恶心的多个主节点的情况（论文&lt;em&gt;图8-d和图8-e&lt;/em&gt;是两种互斥的情况）。&lt;/p&gt;
+
+&lt;p&gt;在这种情况下，&lt;em&gt;图8-c&lt;/em&gt;中新的&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;即便能够确保大多数&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;都收到了，但是如果自己挂了，仍然可能被其他新的&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;覆盖数据的情况（&lt;em&gt;图8-d&lt;/em&gt;）。&lt;/p&gt;
+
+&lt;p&gt;但是这些&lt;strong&gt;未被确认的&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;&lt;/strong&gt;最终总要被确认掉，所以可以利用上面提到的新选成功&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;之后，当前的&lt;a href=&quot;#term&quot;&gt;Term&lt;/a&gt;一定大于这些未确认的消息的&lt;a href=&quot;#term&quot;&gt;Term&lt;/a&gt;这个前提。如果有新的&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;被大部分&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;收到，并且这条消息的&lt;a href=&quot;#term&quot;&gt;Term&lt;/a&gt;和当前节点的&lt;a href=&quot;#term&quot;&gt;CurrentTerm&lt;/a&gt;一致的话，那么确认这条&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;的同时也确认之前的&lt;strong&gt;未被确认的&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;&lt;/strong&gt;（即&lt;a href=&quot;#term&quot;&gt;Term&lt;/a&gt;和当前节点的&lt;a href=&quot;#term&quot;&gt;CurrentTerm&lt;/a&gt;不同的&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;）。这就是&lt;em&gt;图8-e&lt;/em&gt;的情况。这种情况下，不会再发生&lt;em&gt;图8-d&lt;/em&gt;中的消息覆盖，因为那个节点的竞选请求不会被大多数节点投同意票的。&lt;/p&gt;
+
+&lt;p&gt;另外，可以在新&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;被选举出来时立刻提交一个空&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;。用来加快未提交的消息被确认的过程。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-7&quot;&gt;补充内容&lt;/h2&gt;
+
+&lt;p&gt;以下内容是补充这个算法的部分，不是最核心的内容。&lt;/p&gt;
+
+&lt;h3 id=&quot;section-8&quot;&gt;定时器&lt;/h3&gt;
+&lt;p&gt;定时器随机的时间应该远大于估计的通信延迟（避免频繁冲突）。Broadcast Time（RPC交互时间） ≪ Election Timeout（&lt;strong&gt;竞选超时&lt;/strong&gt;，同样上面的总结，区分两种&lt;strong&gt;竞选超时&lt;/strong&gt;时间比较好）≪ MTBF（平均故障时间）&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Broadcast Time(广播[心跳]时间): 0.5-20ms&lt;/li&gt;
+  &lt;li&gt;Idle Periods(心跳间隔): 并没有给出一个推荐的时间，但是为了防止频繁选举，建议要是&lt;strong&gt;竞选超时&lt;/strong&gt;时间的1/N， N&amp;gt;=3 比较好&lt;/li&gt;
+  &lt;li&gt;Election Timeout(&lt;strong&gt;竞选超时&lt;/strong&gt;): 10-500ms(论文中建议150-300ms，但是我觉得这个心跳有点过于频繁了)&lt;/li&gt;
+  &lt;li&gt;MTBF（平均故障时间）: 几个月或更长&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;上面的时间都可以根据实际项目需要来调整，另外很多冲突通过定时器随机时间不同来解决，让我想起了&lt;a href=&quot;https://zh.wikipedia.org/wiki/%E8%B7%B3%E8%B7%83%E5%88%97%E8%A1%A8&quot;&gt;跳表&lt;/a&gt;也是利用了随机的特性来实现的低平均时间复杂度。没有一个严格保证，只是利用了随机数的特点做到平均复杂度。&lt;/p&gt;
+
+&lt;h3 id=&quot;section-9&quot;&gt;扩容、缩容和故障转移&lt;/h3&gt;
+&lt;p&gt;这点&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;并没有做严格限制，不过提供了一个标准的方法。即走两阶段提交。&lt;/p&gt;
+
+&lt;p&gt;下面定义&lt;strong&gt;新集群&lt;/strong&gt;为扩容、缩容或故障转移后新配置的节点集合，&lt;strong&gt;老集群&lt;/strong&gt;为扩容、缩容或故障转移前配置的节点集合。&lt;strong&gt;新老集群&lt;/strong&gt;为&lt;strong&gt;新集群&lt;/strong&gt;和&lt;strong&gt;老集群&lt;/strong&gt;的并集。&lt;/p&gt;
+
+&lt;h4 id=&quot;section-10&quot;&gt;两阶段提交&lt;/h4&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;第一阶段，&lt;strong&gt;新老集群&lt;/strong&gt;共存
+    &lt;ul&gt;
+      &lt;li&gt;生成并提交一个同时包含&lt;strong&gt;新老集群&lt;/strong&gt;配置的&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;，并同步到&lt;strong&gt;新老集群&lt;/strong&gt;的所有节点&lt;/li&gt;
+      &lt;li&gt;所有确认了这个配置的节点是立刻使用新的配置（即如果发生新的RPC，要从&lt;strong&gt;新老集群&lt;/strong&gt;所有节点里找到大多数同意的回包）&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;第二阶段，切换到新集群
+    &lt;ul&gt;
+      &lt;li&gt;生成并提交只包含&lt;strong&gt;新集群&lt;/strong&gt;的配置&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;并同步到&lt;strong&gt;新老集群&lt;/strong&gt;的所有节点。&lt;/li&gt;
+      &lt;li&gt;大部分&lt;strong&gt;新集群&lt;/strong&gt;节点确认了新配置后使用&lt;strong&gt;新集群&lt;/strong&gt;配置&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;不在&lt;strong&gt;新集群&lt;/strong&gt;中则主节点下线&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h4 id=&quot;section-11&quot;&gt;迁移过程中的几个要点&lt;/h4&gt;
+&lt;ul&gt;
+  &lt;li&gt;可以特殊处理加快集群配置的&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;的传输速度，如果是集群配置变更，立刻发心跳包&lt;/li&gt;
+  &lt;li&gt;新上线的节点数据大幅落后，可以等新上线节点数据第一次同步完成后再计入&lt;strong&gt;新老集群&lt;/strong&gt;的大多数节点同意或确认的计数（防止新节点数量过多，copy数据期间集群可能会不可用的问题）&lt;/li&gt;
+  &lt;li&gt;第二阶段结束时，可能原先的主节点不在&lt;strong&gt;新集群&lt;/strong&gt;配置内，那么要等&lt;strong&gt;新集群&lt;/strong&gt;配置被&lt;strong&gt;新集群&lt;/strong&gt;的大部分节点接收后才能下线&lt;/li&gt;
+  &lt;li&gt;即将下线的老节点不会再收到&lt;strong&gt;新集群&lt;/strong&gt;的心跳包，所以可能会触发&lt;em&gt;选举超时&lt;/em&gt;然后向&lt;strong&gt;新集群&lt;/strong&gt;发起选举请求，然后导致&lt;strong&gt;新集群&lt;/strong&gt;&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;被转变为&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;。并且这是循环一直存在的。论文里说可以通过让节点忽略最小选举超时时间内的选举请求，因为&lt;strong&gt;新集群&lt;/strong&gt;的&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;会下发心跳包，而正常的节点触发选举一定大于&lt;em&gt;选举超时&lt;/em&gt;时间的最小值（随机的下限）。&lt;br /&gt;
+&amp;gt; 但是我觉得有个更简单且行之有效的方法：因为大部分节点（这里面包括&lt;strong&gt;新集群&lt;/strong&gt;的主节点）都会收到集群配置，那么直接忽略新配置里没有的节点的RPC消息就好了；另外如果即将下线的老节点也拿到了这个配置，直接停止定时器，别发起选举就行了。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;section-12&quot;&gt;客户端接入&lt;/h3&gt;
+&lt;p&gt;考虑到上面的一些容灾的设计，对客户端的接入其实是有一定要求的。论文里没有太多提及接入的细节，但是也有一些基本的准则。&lt;/p&gt;
+
+&lt;h4 id=&quot;section-13&quot;&gt;容错和重发&lt;/h4&gt;
+
+&lt;p&gt;首先，需要客户端拥有超时机制，并在超时以后能够进行重发操作。因为如果集群节点崩溃，可能会不能正确处理客户端传入的&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;然而，一条&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;存在着可能被服务器成功保存了，但是给客户端的回执丢失的情况。这就需要客户端给&lt;strong&gt;每个命令生成一个唯一的票据(unique serial numbers)&lt;/strong&gt;。无论重发多少次，票据是一样的，并且服务器如果检测到某个客户端的某个票据已经执行过，就不需要再执行一次了。&lt;/p&gt;
+
+&lt;p&gt;那么服务器怎么记录票据呢？ 论文里的提供方法是集群要记录每个client的最后处理的消息的序号。如果某个序号的消息被处理过了，那么就不用再处理一遍。但是还是有一些没有提。首先是怎么区分各个client？因为client会尝试连接不同的节点，连接的断开再连接需要区分新的client是不是先前那一个，难道每个client分配一个ID？如果是这样，那么client下线以后这个client的最后处理的消息的序号要保留多久？肯定不可能无限长。&lt;/p&gt;
+
+&lt;p&gt;我的想法是，避免掉记录每个客户端信息的复杂因素&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;首先给客户端分配ID不可避免，然而其实也可以根据需要指定一个不会冲突的ID生成规则。&lt;/li&gt;
+  &lt;li&gt;然后设计一个算法能够给每个命令生成唯一票据，并且由客户端ID保证票据也唯一。&lt;/li&gt;
+  &lt;li&gt;再次，&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;数据里要附带客户端的ID，所有节点都要索引客户端最后执行序号。&lt;/li&gt;
+  &lt;li&gt;最后服务器和客户端协商一个心跳时间和超时时间。如果网络出现故障，或者服务器挂掉，超出超时时间的客户端执行序列索引就可以清理掉了。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h4 id=&quot;section-14&quot;&gt;只读订阅&lt;/h4&gt;
+&lt;p&gt;为了降低对&lt;a href=&quot;#log&quot;&gt;主节点&lt;/a&gt;的负载，只读订阅可以从&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;拿到数据。但是前面提到过，如果发生故障，切换主节点的时候，会导致部分&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;要等到有新的&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;确认了新&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;之后才能被确认。&lt;/p&gt;
+
+&lt;p&gt;这时候就会存在一定的时间内，某些&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;已经生效了但得不到确认通知。&lt;/p&gt;
+
+&lt;p&gt;那如何尽快确认这些消息呢？方法也很简单，前面也提过&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;被成功选举后，立即发一个空&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;。这样前面不确定是否会被覆盖的消息就会很快被确认下来了。同时这些&lt;a href=&quot;#log&quot;&gt;消息&lt;/a&gt;的确认通知也会广播道所有&lt;a href=&quot;#follower&quot;&gt;从节点&lt;/a&gt;，最终传达到所有的只读订阅的client中。&lt;/p&gt;
+
+&lt;h4 id=&quot;section-15&quot;&gt;负载均衡和容灾通知(主节点变更)&lt;/h4&gt;
+&lt;p&gt;通知Client主节点变更可以和&lt;a href=&quot;http://redis.io/topics/cluster-spec&quot;&gt;Redis Cluster&lt;/a&gt;一样，论文里给出的方法就是和&lt;a href=&quot;http://redis.io/topics/cluster-spec&quot;&gt;Redis Cluster&lt;/a&gt;的一样。这要求Client需要能处理超时、重发和主节点变更的情况。&lt;/p&gt;
+
+&lt;p&gt;具体对接的代码可以参考我之前对&lt;a href=&quot;http://redis.io/topics/cluster-spec&quot;&gt;Redis Cluster&lt;/a&gt;的接入代码库&lt;a href=&quot;https://github.com/owt5008137/hiredis-happ&quot;&gt;hiredis-happ&lt;/a&gt;或者Redis作者提供的阻塞的Ruby版本&lt;a href=&quot;https://github.com/antirez/redis-rb-cluster&quot;&gt;redis-rb-cluster&lt;/a&gt; （不过目前为止这个Redis作者接入的Client还没我这个完整，可能是他并没有话太多精力在Client上吧。另外他只接入了同步API，我只接入了异步API）。&lt;/p&gt;
+
+&lt;p&gt;不过我认为可以按我们目前写得聊天服务器的做法：如果客户端发送的目标不是主节点，集群内部做消息转发，然后回带给客户端主节点的地址。下一次客户端直接发给新的主节点。&lt;/p&gt;
+
+&lt;p&gt;不过无论用哪种方法，客户端都要处理发送超时和网络失败，然后随机找一个有效的新目标进行发送。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;丢失期间，客户端commit的消息会得不到回复。最终会触发前面的超时。&lt;/p&gt;
+
+&lt;h3 id=&quot;section-16&quot;&gt;压缩数据&lt;/h3&gt;
+&lt;p&gt;前面说到，所有的消息交给&lt;a href=&quot;#leader&quot;&gt;主节点&lt;/a&gt;必须只能执行追加操作。那么长时间运行以后，数据量必然越来越大。这时候如果发生扩容或者改变节点，那么复制的量将是不可计量的。这时候就需要对集群中的数据进行适当的处理，减少不必要的&lt;a href=&quot;#log&quot;&gt;Log&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;比如说，先执行了 set a=1,再执行 set a=2。那么其实前一条也就不需要一直保存在集群中了。&lt;/p&gt;
+
+&lt;h2 id=&quot;paxoshttpszhwikipediaorgzh-cnpaxose7ae97e6b395&quot;&gt;与&lt;a href=&quot;https://zh.wikipedia.org/zh-cn/Paxos%E7%AE%97%E6%B3%95&quot;&gt;Paxos&lt;/a&gt;的差异&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&quot;http://ramcloud.stanford.edu/raft.pdf&quot;&gt;《In Search of an Understandable Consensus Algorithm (Extended Version)》&lt;/a&gt;里面有很详细的&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;和&lt;a href=&quot;https://zh.wikipedia.org/zh-cn/Paxos%E7%AE%97%E6%B3%95&quot;&gt;Paxos&lt;/a&gt;性能比较的实测结果，我就不再参合再测一遍了。但是根据自己对这两算法的差异的理解，我自己也能有一些总结，可能不完全正确。&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://zh.wikipedia.org/zh-cn/Paxos%E7%AE%97%E6%B3%95&quot;&gt;Paxos&lt;/a&gt;可以同时提交和处理多个提案，但是发生冲突时，理论上会有更高的延时（协商时间），而&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;算法会天生地把消息确定一个先后顺序。大幅减少了冲突的可能性。&lt;/p&gt;
+
+&lt;p&gt;但是一般情况下，这种最终一致和带协商的算法都只用作一个用途，而且基本就是用于协商服务器分布（因为它的节点数越多，可靠性越好的同时，延时也比较高，不适合做密集运算）。所以&lt;a href=&quot;https://zh.wikipedia.org/zh-cn/Paxos%E7%AE%97%E6%B3%95&quot;&gt;Paxos&lt;/a&gt;的多个不冲突提案可以并行分布到多个节点的特性在实际应用用并不是特别有用。而且看到&lt;a href=&quot;https://github.com/coreos/etcd&quot;&gt;etcd&lt;/a&gt;已经可以做到每秒数千的请求量已经很够用了。&lt;/p&gt;
+
+&lt;p&gt;性能方面，其实无论&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;还是&lt;a href=&quot;https://zh.wikipedia.org/zh-cn/Paxos%E7%AE%97%E6%B3%95&quot;&gt;Paxos&lt;/a&gt;，每个消息都需要经过大部分节点的投票同意，并且都是每个节点最终会得到最终一致的结果，所以正常情况下，他们的性能一样也比较理解。不同的就是&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;的心跳包比较频繁，所以空跑时负载应该会更高一些。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-17&quot;&gt;应用层面的思考&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt; 可以用在哪些地方呢？首先想到和我们的项目相关的一些东西。&lt;/p&gt;
+
+&lt;p&gt;第一个是&lt;strong&gt;Redis Cluster&lt;/strong&gt;自动负载均衡。因为Redis的Cluster的slot和对应主从节点的关系是必须手动配置的。必定要人工感知和手动配置还是比较麻烦，所以如果可以有服务来管理slot的分配和负载均衡就再好不过了。&lt;/p&gt;
+
+&lt;p&gt;再或者我们目前的&lt;strong&gt;聊天服务器&lt;/strong&gt;。目前的架构是类似&lt;strong&gt;Redis Cluster&lt;/strong&gt;的按slot分配订阅通道的，区别就是如果发生故障会自动转移slot到其他可用的节点。然而由于要保证slot分配的最终结果一致，是需要配置一个静态的&lt;strong&gt;控制节点&lt;/strong&gt;，并且只能由控制节点来进行slot的故障转移和负载均衡操作，然而控制节点是单点，如果控制节点崩溃，可能聊天的部分功能短时间（控制节点重启前）不可用，并且故障转移和负载均衡也不可用，并且控制节点重启后会强制执行一次负载均衡（保证以控制节点为准）。如果使用&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt; 算法，则可以由它来决断出控制节点或者slot分配记录。由于最终结果必定是一致的，可以达到去中心化的效果。&lt;/p&gt;
+
+&lt;p&gt;上面提到的两个应用其实都是用于决断服务器集群的分配和配置，这也是我觉得最有意义的地方。而由于&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt; 的响应请求的能力并不是非常强，并且节点越多，性能越差。所以最重要的其实是它能够提供一个&lt;strong&gt;强一致性&lt;/strong&gt;并且&lt;strong&gt;高可用&lt;/strong&gt;的解决方案。而如果一个服务需要很高的性能或能够通过平行扩容来提升承载能力，则需要另外提供&lt;em&gt;分库分表&lt;/em&gt;或者&lt;em&gt;hash&lt;/em&gt;或者类似&lt;strong&gt;Redis Cluster&lt;/strong&gt;的&lt;em&gt;槽分配&lt;/em&gt;的方案。这时候&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;就可以用于维护这些&lt;em&gt;分库分表&lt;/em&gt;或者&lt;em&gt;hash&lt;/em&gt;或者类似&lt;strong&gt;Redis Cluster&lt;/strong&gt;的&lt;em&gt;槽分配&lt;/em&gt;的配置，并达到最终一个去中兴化的服务集群。&lt;/p&gt;
+
+&lt;p&gt;另外，结合上面的应用场景，会需要一个类似时间锁服务的东东。比如，如果redis节点发生故障，可能短时间内有多个监控设施检测到并发起slot转移通知。但是这时候不需要执行很多次，使用任意一次的结果即可。比如：&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;slot[1-128) -&amp;gt; svr1 崩溃&lt;/li&gt;
+  &lt;li&gt;检测服务器A检测到故障，通知slot[1-128) 转移到 svr2 =&amp;gt; Raft消息1&lt;/li&gt;
+  &lt;li&gt;检测服务器B检测到故障，通知slot[1-128) 转移到 svr3 =&amp;gt; Raft消息2&lt;/li&gt;
+  &lt;li&gt;检测服务器C检测到故障，通知slot[1-128) 转移到 svr2 =&amp;gt; Raft消息3&lt;/li&gt;
+  &lt;li&gt;检测服务器D检测到故障，通知slot[1-128) 转移到 svr4 =&amp;gt; Raft消息4&lt;/li&gt;
+  &lt;li&gt;…&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;服务器消息1成功Commited&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;服务器消息2成功Commited&lt;/li&gt;
+  &lt;li&gt;…&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;很显然&lt;em&gt;Raft消息1-Raft消息N&lt;/em&gt;中任何一个都可以完成估值转移，如果这时候能够带一个时间锁，那么短时间的负载均衡或者故障转移通知只会成功一个，就可以避免频繁转移的问题。&lt;/p&gt;
+
+&lt;h2 id=&quot;rafthttpsraftgithubio&quot;&gt;&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;的实现&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt; 上面列了很多协议的实现的库或者组件，我主要看了下&lt;a href=&quot;https://github.com/coreos/etcd&quot;&gt;etcd&lt;/a&gt;和&lt;a href=&quot;#https://github.com/rethinkdb/rethinkdb&quot;&gt;RethinkDB&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;我不喜欢&lt;a href=&quot;https://github.com/coreos/etcd&quot;&gt;etcd&lt;/a&gt;的http协议的使用方式，不过&lt;a href=&quot;#https://github.com/rethinkdb/rethinkdb&quot;&gt;RethinkDB&lt;/a&gt;有点太过于庞大了，而且我不喜欢GPL协议。&lt;/p&gt;
+
+&lt;p&gt;以后还是有空根据需要自己写&lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;的核心部分吧，反正也不难。而且我的需求并不要把它做成完整的数据库，而是做成一个选举主节点的中间层（用主节点来做一些负载均衡方面的决策）。所以一方面可以做成容易嵌入各种实际应用的方式，并且大多数情况下可以忽略Client这一层；另一方面也可以省去很多不必要的协议定制和功能定制。&lt;/p&gt;</content><category term="raft" /><category term="paxos" /><summary></summary></entry><entry><title>关于BUS通信系统的一些思考（三）</title><link href="/article/2015-11-08/thinking_bus_3.html" rel="alternate" type="text/html" title="关于BUS通信系统的一些思考（三）" /><published>2015-11-08T00:00:00+08:00</published><updated>2015-11-08T00:00:00+08:00</updated><id>/article/2015-11-08/thinking_bus_3</id><content type="html" xml:base="/article/2015-11-08/thinking_bus_3.html">&lt;blockquote&gt;
+  &lt;p&gt;&lt;a href=&quot;thinking_bus_2.html&quot;&gt;接上文关于bus通信系统的一些思考（二）&lt;/a&gt;&lt;/p&gt;
+
+  &lt;p&gt;之前的文章内容应该要有修订，但是并没有更新到blog里，而是直接写在了&lt;a href=&quot;https://github.com/owt5008137/libatbus&quot;&gt;libatbus&lt;/a&gt;的文档里&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h2 id=&quot;section&quot;&gt;目录&lt;/h2&gt;
+&lt;nav class=&quot;toc&quot;&gt;
+&lt;ul id=&quot;markdown-toc&quot;&gt;
+  &lt;li&gt;&lt;a href=&quot;#section&quot; id=&quot;markdown-toc-section&quot;&gt;目录&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-1&quot; id=&quot;markdown-toc-section-1&quot;&gt;前言&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-2&quot; id=&quot;markdown-toc-section-2&quot;&gt;节点关系的初步想法&lt;/a&gt;    &lt;ul&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-3&quot; id=&quot;markdown-toc-section-3&quot;&gt;协议规划&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-4&quot; id=&quot;markdown-toc-section-4&quot;&gt;接口和结构规划&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;/nav&gt;
+
+&lt;h2 id=&quot;section-1&quot;&gt;前言&lt;/h2&gt;
+&lt;p&gt;好久没写总结啦，最近一段时间比较忙，抽出的空闲时间都在不断完善之前提到的一个进程间通信lib的想法和实现（&lt;a href=&quot;https://github.com/owt5008137/libatbus&quot;&gt;libatbus&lt;/a&gt;）。&lt;/p&gt;
+
+&lt;p&gt;因为这个想法从提出来后实现了共享内存通信的实现后，一直没抽出空来继续后面的内容。而且做得过程中发现，这比之前想象的还是要复杂一些，一个人的空闲时间很难做到非常的完善，只能先有个实现，以后再一点点地改善。毕竟人家TX两个人全职做了两年才能做到一个比较完整的解决方案，而且还不跨平台。我这个虽然有一些非核心的部分使用开源组件，能少很多工作量，但是要做到跨平台并且只是业余时间搞的话还是得慢慢来。&lt;/p&gt;
+
+&lt;p&gt;这段时间的完善后，所有最初预想的通信方式都已经实现。包括&lt;strong&gt;内存，共享内存，tcp/ipv4，tcp/ipv6，tcp/dns，unix sock&lt;/strong&gt;。这几种方式。并且为以后可能的一些通信方式做了少量预留。同时完成了同时支持使用&lt;strong&gt;自定义的简单环形队列缓冲区&lt;/strong&gt;（省去复杂内存块管理的CPU消耗，内存换CPU）和使用&lt;strong&gt;动态缓冲区&lt;/strong&gt;（mallo/free）。之所以不实现复杂的内存管理是由于tcmalloc和jemalloc已经足够优秀。如果需要复杂高效的动态内存管理，用这两个东西替换掉ptmalloc或其他系统自带的内存管理器就已经足够高效。&lt;/p&gt;
+
+&lt;p&gt;更总要的是，这段时间我还对目前已实现的功能都做了比较完整的&lt;strong&gt;单元测试&lt;/strong&gt;。并且我也对自己的单元测试的框架做了少量优化。在单元测试的过程中确实能发现很多低级的细节问题，特别是对重构数据结构和一些流程细节的帮助非常大。另外由于使用的libuv在Windows下只支持MSVC，而且目前最新版本&lt;strong&gt;&lt;em&gt;Windows下的pipe类型通信不能正常工作&lt;/em&gt;&lt;/strong&gt;，所以我关闭了Windows版本下的&lt;strong&gt;&lt;em&gt;unix sock&lt;/em&gt;&lt;/strong&gt;类型的单元测试。&lt;/p&gt;
+
+&lt;p&gt;剩下的最重要的就是实现节点关系相关的逻辑代码了。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-2&quot;&gt;节点关系的初步想法&lt;/h2&gt;
+&lt;p&gt;本来想直接开写得，但是实现过程中发现有点混乱。所以还是需要整理并理清下流程和思路。本文最重要的是帮自己理清思路，所以列一个提纲过来，会实时补充（也会优先补在&lt;a href=&quot;https://github.com/owt5008137/libatbus&quot;&gt;libatbus&lt;/a&gt;的文档里），并且语言必定不会严谨。大纲如下：&lt;/p&gt;
+
+&lt;h3 id=&quot;section-3&quot;&gt;协议规划&lt;/h3&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;数据转发协议请求
+    &lt;ul&gt;
+      &lt;li&gt;如果目标自身直接接收，返回成功否则路由信息+1，进入后续流程&lt;/li&gt;
+      &lt;li&gt;ttl+1，判定跳数过多则返回失败&lt;/li&gt;
+      &lt;li&gt;如果目标节点子节点子域
+        &lt;ul&gt;
+          &lt;li&gt;不存在连接完成返回错误&lt;/li&gt;
+          &lt;li&gt;直接转发子节点&lt;/li&gt;
+          &lt;li&gt;如果发送方是子节点,允许子节点直连,选取最优通道通知建立子节点直连通道&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+      &lt;li&gt;如果目标是兄弟节点或兄弟节点子域
+        &lt;ul&gt;
+          &lt;li&gt;如果直连通道连接建立完成，直接转发&lt;/li&gt;
+          &lt;li&gt;否则发给父节点&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+      &lt;li&gt;其他情况发给父节点或出错&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;数据转发协议响应
+    &lt;ul&gt;
+      &lt;li&gt;反向发回，忽视错误&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;注册协议请求（握手阶段）
+    &lt;ul&gt;
+      &lt;li&gt;附带自身pid，监听信息，机器标识&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;注册协议回包（握手阶段）
+    &lt;ul&gt;
+      &lt;li&gt;成功则连接加入endpoint&lt;/li&gt;
+      &lt;li&gt;错误则移除连接&lt;/li&gt;
+      &lt;li&gt;如果错误码ID冲突则node下线&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;节点同步协议
+    &lt;ul&gt;
+      &lt;li&gt;定时拉取&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;新连接协议
+    &lt;ul&gt;
+      &lt;li&gt;指定子节点A，连接子节点B&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Ping协议请求
+    &lt;ul&gt;
+      &lt;li&gt;Ping测试次数+1，如果超过容错则节点下线&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Ping协议回包
+    &lt;ul&gt;
+      &lt;li&gt;重置ping测试次数0&lt;/li&gt;
+      &lt;li&gt;记录延迟&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h3 id=&quot;section-4&quot;&gt;接口和结构规划&lt;/h3&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;atbus节点（node）
+    &lt;ul&gt;
+      &lt;li&gt;状态
+        &lt;ul&gt;
+          &lt;li&gt;未初始化&lt;/li&gt;
+          &lt;li&gt;初始化完成&lt;/li&gt;
+          &lt;li&gt;丢失父节点&lt;/li&gt;
+          &lt;li&gt;正在注册到父节点&lt;/li&gt;
+          &lt;li&gt;注册完成&lt;/li&gt;
+          &lt;li&gt;正在关闭&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+      &lt;li&gt;API:获取进程ID: getpid&lt;/li&gt;
+      &lt;li&gt;API:获取主机名: gethostname&lt;/li&gt;
+      &lt;li&gt;配置:
+        &lt;ul&gt;
+          &lt;li&gt;节点逻辑:ttl&lt;/li&gt;
+          &lt;li&gt;节点逻辑:允许子节点直连&lt;/li&gt;
+          &lt;li&gt;节点逻辑:是否需要全局路由表（控制是否发送节点同步协议）&lt;/li&gt;
+          &lt;li&gt;节点逻辑:消息循环次数限制（防止单一通道繁忙导致其他通道饥饿）&lt;/li&gt;
+          &lt;li&gt;节点逻辑:事件管理对象（ev_loop）&lt;/li&gt;
+          &lt;li&gt;节点逻辑:子节点掩码&lt;/li&gt;
+          &lt;li&gt;网络:backlog&lt;/li&gt;
+          &lt;li&gt;网络:第一次发包时间限制&lt;/li&gt;
+          &lt;li&gt;节点逻辑:Ping包间隔&lt;/li&gt;
+          &lt;li&gt;节点逻辑:错误容忍次数（超出次数视为下线）&lt;/li&gt;
+          &lt;li&gt;网络:重试间隔（父节点断线重连间隔）&lt;/li&gt;
+          &lt;li&gt;缓冲区：消息体大小&lt;/li&gt;
+          &lt;li&gt;缓冲区：内存通道的接收缓冲区&lt;/li&gt;
+          &lt;li&gt;缓冲区：每个连接的发送缓冲区&lt;/li&gt;
+          &lt;li&gt;缓冲区：静态发送缓冲区的消息个数限制&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+      &lt;li&gt;API:查找匹配子域节点(map,记录子域,upper_bound)&lt;/li&gt;
+      &lt;li&gt;API:判定节点间最优通路&lt;/li&gt;
+      &lt;li&gt;定时器
+        &lt;ul&gt;
+          &lt;li&gt;connection超时下线&lt;/li&gt;
+          &lt;li&gt;父节点重连&lt;/li&gt;
+          &lt;li&gt;Ping&lt;/li&gt;
+          &lt;li&gt;同步协议&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+      &lt;li&gt;回调函数
+        &lt;ul&gt;
+          &lt;li&gt;接收到消息&lt;/li&gt;
+          &lt;li&gt;错误处理&lt;/li&gt;
+          &lt;li&gt;完成注册&lt;/li&gt;
+          &lt;li&gt;节点下线&lt;/li&gt;
+          &lt;li&gt;节点上线（所有连接进入完成状态）&lt;/li&gt;
+          &lt;li&gt;非法连接&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+      &lt;li&gt;API:监听地址
+        &lt;ul&gt;
+          &lt;li&gt;可同时监听点对点IO和共享通道&lt;/li&gt;
+          &lt;li&gt;初始接受的连接为命令通道，接收到注册请求后主动发起的连接为数据通道&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+      &lt;li&gt;API:连接目标
+        &lt;ul&gt;
+          &lt;li&gt;连接内存和共享内存通道必须指定正确的目标，因为这些通道是共享的，不存在握手阶段&lt;/li&gt;
+          &lt;li&gt;初始发起的连接为命令通道，连上后发起注册协议。收到注册回包后重新发起的连接为数据通道&lt;/li&gt;
+          &lt;li&gt;这里建议配置上初始连接走点对点IO流通信
+            &lt;ul&gt;
+              &lt;li&gt;IO流通信即连接协议为ipv4,ipv6,dns或unix&lt;/li&gt;
+              &lt;li&gt;命令变化不多，性能要求相对较低&lt;/li&gt;
+              &lt;li&gt;如果初始通道是内存或共享内存通道，可能导致命令通道和数据通道是同一个&lt;/li&gt;
+            &lt;/ul&gt;
+          &lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+      &lt;li&gt;未完成的连接池（用于防止重复连接和重复发送握手包）
+        &lt;ul&gt;
+          &lt;li&gt;主动连接的address=对端监听地址，被动接受的address=对端发起地址&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;端点endpoint
+    &lt;ul&gt;
+      &lt;li&gt;id&lt;/li&gt;
+      &lt;li&gt;child_mask&lt;/li&gt;
+      &lt;li&gt;记录所属node&lt;/li&gt;
+      &lt;li&gt;判定是否子域&lt;/li&gt;
+      &lt;li&gt;add_connection&lt;/li&gt;
+      &lt;li&gt;包含connection集合，区分控制命令connection和数据connection&lt;/li&gt;
+      &lt;li&gt;销毁释放所有connection&lt;/li&gt;
+      &lt;li&gt;选取发送通道（数据转发协议的流程）&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Connection
+    &lt;ul&gt;
+      &lt;li&gt;address&lt;/li&gt;
+      &lt;li&gt;状态:
+        &lt;ul&gt;
+          &lt;li&gt;未连接&lt;/li&gt;
+          &lt;li&gt;正在连接（内存通道或者共享内存通道没有这个状态）&lt;/li&gt;
+          &lt;li&gt;正在握手（检测双方node的id）&lt;/li&gt;
+          &lt;li&gt;正在运行&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+      &lt;li&gt;各类connection的发送接口，proc接口，free接口&lt;/li&gt;
+      &lt;li&gt;记录所属node&lt;/li&gt;
+      &lt;li&gt;记录所属endpoint&lt;/li&gt;
+      &lt;li&gt;连接断开、连接失败接口
+        &lt;ul&gt;
+          &lt;li&gt;如果是父节点加入重试等待队列&lt;/li&gt;
+          &lt;li&gt;否则清理节点信息&lt;/li&gt;
+          &lt;li&gt;关闭时如果endpoint没有可用控制命令connection或数据connection，endpoint下线（防止部分通道断开，然后数据通道被用作命令通道）&lt;br /&gt;
+统一发送接口&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;目前这样的设计中有一个最重要的部分是连接和握手的流程，纪要考虑子节点和父节点之间自动连接的流程和兄弟节点间由父节点通知而自动连接的过程，也要考虑手动连接兄弟节点的流程；然后连接可能会在多台物理机上的问题；还有连接部分丢失的问题。&lt;/p&gt;
+
+&lt;p&gt;按照推荐的标准流程的话，如果节点之间如果只用点对点IO流，那么命令通道和数据通道会分别有一个。但是只用共享内存的话，只会有一个通道。混用的情况就更复杂了，不再详细说明。&lt;/p&gt;
+
+&lt;p&gt;如果上述设计有问题的话，还需要另外在修订&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Written with &lt;a href=&quot;https://stackedit.io/&quot;&gt;StackEdit&lt;/a&gt;.&lt;/p&gt;
+&lt;/blockquote&gt;</content><category term="libatbus" /><category term="cxx" /><category term="bus" /><category term="rpc" /><category term="cpp" /><category term="c++" /><summary>接上文关于bus通信系统的一些思考（二）
+
+  之前的文章内容应该要有修订，但是并没有更新到blog里，而是直接写在了libatbus的文档里</summary></entry><entry><title>关于BUS通信系统的一些思考（二）</title><link href="/article/2014-12-02/thinking_bus_2.html" rel="alternate" type="text/html" title="关于BUS通信系统的一些思考（二）" /><published>2014-12-02T00:00:00+08:00</published><updated>2014-12-02T00:00:00+08:00</updated><id>/article/2014-12-02/thinking_bus_2</id><content type="html" xml:base="/article/2014-12-02/thinking_bus_2.html">&lt;h1 id=&quot;bus&quot;&gt;关于BUS通信系统的一些思考（二）&lt;/h1&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;接上文&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h2 id=&quot;section&quot;&gt;目录&lt;/h2&gt;
+&lt;nav class=&quot;toc&quot;&gt;
+&lt;ul id=&quot;markdown-toc&quot;&gt;
+  &lt;li&gt;&lt;a href=&quot;#bus&quot; id=&quot;markdown-toc-bus&quot;&gt;关于BUS通信系统的一些思考（二）&lt;/a&gt;    &lt;ul&gt;
+      &lt;li&gt;&lt;a href=&quot;#section&quot; id=&quot;markdown-toc-section&quot;&gt;目录&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#bus&quot; id=&quot;markdown-toc-bus&quot;&gt;BUS系统的设计思路&lt;/a&gt;        &lt;ul&gt;
+          &lt;li&gt;&lt;a href=&quot;#section-1&quot; id=&quot;markdown-toc-section-1&quot;&gt;结构设计&lt;/a&gt;&lt;/li&gt;
+          &lt;li&gt;&lt;a href=&quot;#section-4&quot; id=&quot;markdown-toc-section-4&quot;&gt;通信模式&lt;/a&gt;&lt;/li&gt;
+          &lt;li&gt;&lt;a href=&quot;#section-11&quot; id=&quot;markdown-toc-section-11&quot;&gt;其他杂项&lt;/a&gt;&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-12&quot; id=&quot;markdown-toc-section-12&quot;&gt;最后&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;/nav&gt;
+
+&lt;h2 id=&quot;bus&quot;&gt;BUS系统的设计思路&lt;/h2&gt;
+&lt;p&gt;虽然我很不愿意再设计一套BUS系统，但是现有的一些确实都没有特别符合我的口味的。所以还是尝试设计一个出来。&lt;/p&gt;
+
+&lt;h3 id=&quot;section-1&quot;&gt;结构设计&lt;/h3&gt;
+&lt;p&gt;简单来说，我希望BUS系统可以简单、高效、稳定。&lt;/p&gt;
+
+&lt;h4 id=&quot;section-2&quot;&gt;节点标识&lt;/h4&gt;
+&lt;p&gt;首先，在&lt;strong&gt;节点标识&lt;/strong&gt;方面，类似ZeroMQ的用字符串来标识端点的做法我认为是不必要的。这点上可以参照前面两种的设计，但某些情况下32位作类型分割的可能会不够，所以可以使用&lt;strong&gt;&lt;em&gt;64位标识&lt;/em&gt;&lt;/strong&gt;。其实还有一个重要的原因是64位数字可以整个存放在CPU寄存器里，可以通过一个汇编指令进行比较操作，无论性能还是可以表示的节点个数都很足够。&lt;/p&gt;
+
+&lt;h4 id=&quot;section-3&quot;&gt;节点间关系&lt;/h4&gt;
+&lt;p&gt;第二点就是&lt;strong&gt;节点间关系&lt;/strong&gt;，我觉得可以设计成&lt;strong&gt;&lt;em&gt;树形结构&lt;/em&gt;&lt;/strong&gt;，而不是像上面一样的代理节点+数据节点的结构。再考虑BUS通信一般会碰到的几种消息流转方式。&lt;/p&gt;
+
+&lt;p&gt;第一中情况是两个节点直连。那么节点里要&lt;strong&gt;记录直连的节点表&lt;/strong&gt;。&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;sequence
+节点A-&amp;gt;节点B:
+节点B-&amp;gt;节点A:
+&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;第二种是需要通过公共父节点转发。&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;sequence
+节点A-&amp;gt;公共父节点:找不到直连信息，发给父节点
+公共父节点-&amp;gt;节点B:转发消息
+&lt;/code&gt;&lt;br /&gt;
+这种情况又有分支，一种是接下来父节点通知两个子节点直接建立连接通道，另一种是不通知，每次都由父节点转发。如果子节点要建立直连通道则如下图所示：&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;sequence
+节点A-&amp;gt;公共父节点:找不到直连信息，发给父节点
+公共父节点-&amp;gt;节点B:转发消息
+公共父节点-&amp;gt;节点A:通知节点A直连到节点B
+节点A-&amp;gt;节点B:有直连信息，直接发送
+&lt;/code&gt;&lt;br /&gt;
+按照之前真实系统的设计，节点分为三层的情况下（第一层是集群管理节点；第二层为物理机代理节点；第三层是业务进程节点）。第一层节点再转发的时候会通知第二层节点之间直连，第二层也会通知第三层节点之间互联，所以这里&lt;strong&gt;&lt;em&gt;建议默认开启通知子节点互相直连&lt;/em&gt;&lt;/strong&gt;的通知。&lt;/p&gt;
+
+&lt;p&gt;这里的第二个问题在于需要转发时的消息路由。在没有目标节点信息的情况下，当节点需要发送消息，是直接扔给父节点呢还是直接返回错误呢？这两种方式都各有利弊。一，没有目标节点就发给父节点，这种方式很简单，但是发送节点自身不能立刻感知是否发送成功，如果不成功需要等父节点通知，这一定是一个异步的过程；二，没有目标节点就直接返回错误，这种方式就会导致父节点在收到节点变更的通知后要把整个路由表下发，并且这期间必然存在时延。&lt;/p&gt;
+
+&lt;p&gt;前一种需要&lt;strong&gt;错误回执协议&lt;/strong&gt;（假设数据不会丢失，那么正确转发的情况下不需要回包），而且这种&lt;em&gt;错误回执是可选的&lt;/em&gt;。而后一种需要&lt;strong&gt;路由表同步协议&lt;/strong&gt;，并且节点内至少要对节点ID做索引。&lt;/p&gt;
+
+&lt;p&gt;所以按照这样的设计思路，节点注册到父节点时要报告给父节点自己是否需要全局路由表，并且&lt;strong&gt;当父节点没有全局路由表时，子节点也不能有&lt;/strong&gt;（这里不符合条件时最好注册出错）。另外父节点需要维护一个有全局路由表的子节点列表。&lt;/p&gt;
+
+&lt;p&gt;在线上实际运行的环境里还碰到一个问题，就是&lt;strong&gt;&lt;em&gt;当有大量需要全局路由表的子节点注册时，只需要把最终结果广播一下&lt;/em&gt;&lt;/strong&gt;就好了。不需要每次注册上来子节点都广播通知，这样会浪费大量通信流量。这里可以拿一个定时器保护一下。&lt;/p&gt;
+
+&lt;p&gt;另一个问题是&lt;strong&gt;节点注册消息的时延问题&lt;/strong&gt;，如果两个相同ID的节点出现在两个不同的地方同时注册，那么当他们传递到第一个有全局路由表的节点时可能都是合法的。要解决这个问题方式之一是选举出一个总裁决节点，但是决策这个总裁决节点也存在时延，而如果要引入&lt;a href=&quot;http://zh.wikipedia.org/wiki/Paxos%E7%AE%97%E6%B3%95&quot;&gt;Paxos&lt;/a&gt;算法又过于复杂了。而且这个问题很容易在配置管理层解决，所以这里倾向于参考&lt;a href=&quot;http://zh.wikipedia.org/wiki/%E5%AD%90%E7%BD%91&quot;&gt;&lt;em&gt;子网掩码&lt;/em&gt;&lt;/a&gt;的做法，&lt;strong&gt;给每一个节点设置子节点范围&lt;/strong&gt;，注册时节点ID和其子节点可变范围都必须在范围内。比如，节点上报ID为0x1234，子节点可变范围是24位，则0x000000 &lt;em&gt;1234&lt;/em&gt; &lt;strong&gt;000001&lt;/strong&gt;到0x000000 &lt;em&gt;1234&lt;/em&gt; &lt;strong&gt;FFFFFF&lt;/strong&gt; 都是可用的子节点ID（其中0x0000001234000000是这个节点的ID）。&lt;/p&gt;
+
+&lt;p&gt;当然还有第三种方式，就是没有公共父节点的情况。&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;sequence
+节点A-&amp;gt;A的父节点:找不到直连信息，发给父节点
+A的父节点--&amp;gt;B的父节点:任何方式都可能
+B的父节点-&amp;gt;节点B:直接转给节点B
+&lt;/code&gt;&lt;br /&gt;
+这种情况可以简单暴力了，每次有消息都转给父节点就好了。&lt;/p&gt;
+
+&lt;h3 id=&quot;section-4&quot;&gt;通信模式&lt;/h3&gt;
+&lt;p&gt;接下来时通信模式。每个节点都有一个唯一ID，但是通信模式可以有很多。其中最主流的就是网络Socket。BUS系统应该设计成容易拓展或者拆除某些通信模式，所以通信模式必须抽象出来。&lt;/p&gt;
+
+&lt;p&gt;另外一点，就是希望BUS系统里，节点的接收端只有一个。这样可以做到地址收敛，简化通信模型。&lt;/p&gt;
+
+&lt;h4 id=&quot;section-5&quot;&gt;通信连接的建立&lt;/h4&gt;
+&lt;p&gt;当有多种连接方式的时候，问题之一就是两个节点间应该以什么连接方式互联。&lt;/p&gt;
+
+&lt;p&gt;很多BUS系统的通道是读写分离和控制通道和数据通道分离的，这么设计的好处是简单、高效。带来的坏处就是，通道缓冲区浪费和可能某一个通道堵塞但是另一个通道正常。比如，控制通道堵塞，但是数据通道正常，这时候父节点可能回认为子节点下线；又或是控制通道正常，但是数据通道堵塞，这时候父节点回认为子节点正常，但这时候数据是发送不成功的。所以理想情况下&lt;strong&gt;通道还是应该只有一个&lt;/strong&gt;，这样也就意味着要有控制协议和包头。&lt;/p&gt;
+
+&lt;p&gt;再拿之前的共享内存的例子来说，进程节点只有共享内存通道一种，但是代理节点有socket和共享内存通道两种。节点再注册时，怎么连接到父节点的通信通道和自身的接收通道是子节点决定的。如果我们把通道按优先级分化，假设网络Socket的优先级是3，Unix Socket的优先级是2，共享内存的优先级是1。那么子节点到父节点的通道优先级优先级高的一方连接低一方或者相等的一方一定是通的（当然是不出现故障的情况下）。&lt;/p&gt;
+
+&lt;p&gt;双方都是高优先级时：&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;sequence
+节点B-&amp;gt;父节点:共享内存，优先级1（通路）
+父节点-&amp;gt;节点A:共享内存，优先级1（通路）
+节点B-&amp;gt;节点A:共享内存，优先级1（通路）
+&lt;/code&gt;&lt;br /&gt;
+一方是高优先级时：&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;sequence
+节点B-&amp;gt;父节点:共享内存，优先级1（通路）
+父节点-&amp;gt;节点A:网络Socket，优先级3（通路）
+节点B-&amp;gt;节点A:网络Socket，优先级3（通路）
+&lt;/code&gt;&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;sequence
+节点B-&amp;gt;父节点:网络Socket，优先级3（通路）
+父节点-&amp;gt;节点A:共享内存，优先级1（通路）
+节点B-&amp;gt;节点A:网络Socket，优先级3（如果节点A有网络Socket接收通道，通路）
+节点B--&amp;gt;节点A:共享内存，优先级1（不一定通）
+&lt;/code&gt;&lt;br /&gt;
+双方是低优先级时：&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;sequence
+节点B-&amp;gt;父节点:网络Socket，优先级3（通路）
+父节点-&amp;gt;节点A:网络Socket，优先级3（通路）
+节点B-&amp;gt;节点A:网络Socket，优先级3（通路）
+节点B--&amp;gt;节点A:共享内存，优先级1（如果节点A有共享内存通道，不一定通）
+&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;所以&lt;strong&gt;子节点上报时还要通知兄弟节点接入的允许的通道类型&lt;/strong&gt;。同样，&lt;em&gt;如果没有允许的连接通道，则父节点也不需要再发兄弟节点直连通知&lt;/em&gt;。&lt;/p&gt;
+
+&lt;h4 id=&quot;socket&quot;&gt;网络Socket&lt;/h4&gt;
+&lt;p&gt;网络Socket就很简单，因为本来就是面向连接的。加一下断线重联什么的就好了。然后linux下加个epoll、windows下加个iocp、其他什么系统价格kqueue什么的就好了。&lt;/p&gt;
+
+&lt;h4 id=&quot;unix-socket&quot;&gt;Unix Socket&lt;/h4&gt;
+&lt;p&gt;这玩意纯属IPC用得，操作和网络Socket一样，不能跨机器通信。&lt;/p&gt;
+
+&lt;h4 id=&quot;section-6&quot;&gt;共享内存&lt;/h4&gt;
+&lt;p&gt;使用共享内存最大的困难就是前面的收敛接收端点的需求。对于socket而言，因为一定是面向连接的一对一的所以比较好说。而共享内存要收敛接收端就必须实现至少&lt;strong&gt;多写单读&lt;/strong&gt;的共享内存通道。&lt;/p&gt;
+
+&lt;h5 id=&quot;section-7&quot;&gt;单读单写的共享内存通道&lt;/h5&gt;
+&lt;p&gt;前面提及的BUS系统有些在内存和共享内存通道上是单读单写的模式。这种方式比较简单，对于一个用于循环队列的内存块。&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;
+                         ▼
+|||||||||||###############||||||||||||||||||
+          △
+&lt;/code&gt;&lt;br /&gt;
+单读单写需要一个读游标一个写游标。写入操作时，先写入数据。&lt;/p&gt;
+
+&lt;div class=&quot;highlighter-rouge&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;                         ▼
+|||||||||||###############WWWWWWWWWW||||||||
+          △
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;
+&lt;p&gt;再移动写游标位置。当然写入前要先判断是否有足够的写入空间，并且不会抵达读游标的位置。&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;
+                                   ▼
+|||||||||||#########################||||||||
+          △
+&lt;/code&gt;&lt;br /&gt;
+而读操作的时候，首先要判断读游标没有到写游标的位置，这样表示有数据。然后读入时，也是先读数据。&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;
+                                   ▼
+|||||||||||RRRRRR###################||||||||
+          △
+&lt;/code&gt;&lt;br /&gt;
+再移动游标位置。&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;
+                                   ▼
+|||||||||||||||||###################||||||||
+                △
+&lt;/code&gt;&lt;br /&gt;
+这种情况，在共享内存里操作甚至不需要原子操作，只要注意去掉寄存器缓存（C/C++里加&lt;em&gt;volatile&lt;/em&gt;关键字）就可以了。不需要原子操作的原因在于，每个节点只会操作一个游标，并且一个节点只操作空白区域，另一个节点只操作数据区域。&lt;/p&gt;
+
+&lt;h5 id=&quot;section-8&quot;&gt;单读多写的共享内存通道&lt;/h5&gt;
+&lt;p&gt;单读多写的通道有助于把收消息节点收敛到一处。而单读多写意味着最大的难点在于单处读取和多处写入不冲突，并且当有节点出错的时候能保证赃数据被跳过。&lt;/p&gt;
+
+&lt;p&gt;为了解决上诉问题，可以把内存分为若干个内存块，然后每个内存块有一个信息头，记录了这个块内的标记位(对齐到4字节，便于编译优化)（包含写完标记位、是否起始node标记位和是否有后续节点的标记位）。&lt;/p&gt;
+
+&lt;p&gt;另外首节点还需要附加CRC校验码（使用自定义memcpy函数，copy的同时做校验并清0）、数据总长度和第一次尝试读取的时间。&lt;/p&gt;
+
+&lt;p&gt;最后整个内存块前端有一个整体head，记录了每个数据node的大小，数据node的个数，原子操作的读游标，写游标，统计信息和一些配置，比如读取时间容忍值（据Google一个文档说内存访问大约每毫秒可以到4MB，所以1毫秒的容忍值已经绰绰有余）。最后对齐到4KB（默认一个分页）用于以后拓展。&lt;/p&gt;
+
+&lt;p&gt;对于冲突问题&lt;br /&gt;
+1. &lt;strong&gt;读-读冲突&lt;/strong&gt;：只考虑单点读，没有这个问题。&lt;br /&gt;
+2. &lt;strong&gt;读-写冲突&lt;/strong&gt;：head有写完毕标记位，当写数据块准备完毕时才开始读。&lt;br /&gt;
+3. &lt;strong&gt;写-写冲突&lt;/strong&gt;：写游标是原子操作，每个节点写缓冲区独立。&lt;br /&gt;
+4. &lt;strong&gt;写进程崩溃&lt;/strong&gt;：会产生赃数据块，即写完标记永远是未写完。这时候可以利用上上面提到的第一次读取时间。如果是0，则取当前时间赋值，否则如果超出容忍值，就视为赃数据块。取时间可以使用clock函数（Linux下实测每次执行消耗约160ns），也可以用汇编直接提取CPU时钟。一般情况下系统应该在数百次读取无数据后休眠至少一个时间片的时间(Linux下一般最少有4ms)，这时候写进程还没写完基本可以认为是出现赃数据。&lt;br /&gt;
+5. &lt;strong&gt;读进程崩溃&lt;/strong&gt;：移动读游标是最后的操作，下次启动时可以继续，不会丢失数据。&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;2014/11/07&lt;/strong&gt;&lt;br /&gt;
+实际实现过程中发现共享通道时的读-写冲突和写-写冲突是不能完全避免的，另外多进程结构下的原子操作也很难保证强一致。所以在代码中增加了校验和自动重试。最终实现的代码中多进程发消息时，消息丢失率在三亿分之一左右。我觉得属于可接受范围，以后有时间可以抠细节去优化调整它。&lt;/p&gt;
+
+&lt;h5 id=&quot;section-9&quot;&gt;多读多写的共享内存通道&lt;/h5&gt;
+&lt;p&gt;这个可以作为以后拓展项。不是基本功能可以暂不提供。&lt;/p&gt;
+
+&lt;h5 id=&quot;section-10&quot;&gt;共享内存消息通知&lt;/h5&gt;
+&lt;p&gt;以上通道完成以后，共享内存消息还只能通过轮询得知是否有数据。对于每个线程只有一个节点的情况还比较好说，但是节点个数多了以后就有必要仿照epoll提供通知机制。常见的解决方案有：&lt;br /&gt;
+1. fifo&lt;br /&gt;
+2. eventfd/signalfd&lt;br /&gt;
+3. socket&lt;br /&gt;
+各有利弊吧。无论使用哪种，都需要注意的是&lt;em&gt;通知的性能会远低于数据收发&lt;/em&gt;，所以每次通知需要尝试读完通道里的消息；另外要注意重复通知的问题。&lt;/p&gt;
+
+&lt;p&gt;消息通知也不是核心功能，早期也可以不提供。&lt;/p&gt;
+
+&lt;h3 id=&quot;section-11&quot;&gt;其他杂项&lt;/h3&gt;
+&lt;p&gt;#### 序列化、反序列化和包头&lt;/p&gt;
+
+&lt;p&gt;为了减少内存消耗，需要在包头里对表示整形的数据做一些&lt;strong&gt;压缩处理&lt;/strong&gt;。&lt;/p&gt;
+
+&lt;p&gt;比较成熟的解决方案有很多，比如&lt;a href=&quot;http://code.google.com/p/protobuf/&quot;&gt;Protobuf&lt;/a&gt;的(varint)[]。每个字节的第一个bit用于表示后一个字节是不是这个varint，其他7个bit表示数据。&lt;/p&gt;
+
+&lt;p&gt;还有&lt;a href=&quot;http://kentonv.github.io/capnproto/index.html&quot;&gt;Cap’s Proto&lt;/a&gt;的&lt;a href=&quot;http://kentonv.github.io/capnproto/encoding.html#packing&quot;&gt;压缩方案&lt;/a&gt;。简化为int型压缩可以总结为：第一个字节作为bitmap表示后面8个非0字节的位置，然后后面依次跟非0字节的内容；如果第一个字节是0x00表示数字0；第一个字节是0xFF则第10个字节再按上面的流程走一次。&lt;/p&gt;
+
+&lt;p&gt;另外还有&lt;a href=&quot;http://msgpack.org/&quot;&gt;MessagePack&lt;/a&gt;的&lt;a href=&quot;https://github.com/msgpack/msgpack/blob/master/spec.md#formats-int&quot;&gt;int压缩方案&lt;/a&gt;。第一个字节描述类型，后面跟数据。&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;比较上面几种压缩方式&lt;/strong&gt;，Protobuf和Cap’s Proto都&lt;em&gt;支持不限长度的int&lt;/em&gt;，但是由于系统里的Cap’s Proto的方案，只要不是0，就至少需要两字节。只有当数字大于7个字节时，protobuf的长度才会比Cap’s Proto长；再考虑到bus通信中的消息一般不会很大，一个字节的protobuf的表示范围是[0, 128)，涵盖了大部分消息包长度，两个字节是[0, 16K)基本涵盖所有消息包长度。所以这里推崇使用&lt;strong&gt;&lt;em&gt;Protobuf的方案&lt;/em&gt;&lt;/strong&gt;。&lt;/p&gt;
+
+&lt;p&gt;在包头方面，&lt;strong&gt;第一层包头&lt;/strong&gt;一般在共享内存或者socket表示长度上，共享内存的数据都在同一台机器上，进程间系统架构一致，所以为了简单、高效，&lt;strong&gt;共享内存包头&lt;/strong&gt;直接上&lt;em&gt;裸内存&lt;/em&gt;数据即可。如果在socket上通信则可以选择用前面提到的&lt;strong&gt;varint&lt;/strong&gt;。&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;第二层包头&lt;/strong&gt;用于区分控制指令和消息转发。这部分建议用&lt;a href=&quot;http://google.github.io/flatbuffers/&quot;&gt;Flatbuffers&lt;/a&gt;来打解包。当然也可以选择&lt;a href=&quot;http://code.google.com/p/protobuf/&quot;&gt;Protobuf&lt;/a&gt;或者&lt;a href=&quot;http://kentonv.github.io/capnproto/index.html&quot;&gt;Cap’s Proto&lt;/a&gt;或者&lt;a href=&quot;http://msgpack.org/&quot;&gt;MessagePack&lt;/a&gt;。推荐Flatbuffers的原因是&lt;strong&gt;简单高效&lt;/strong&gt;。但是要注意一点就是Flatbuffers依赖比较高版本的编译器，而使用Cap’s Proto必须保证通行的机器之间的架构一致（这一点再服务端比较容易达成）。&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;第三部分&lt;/strong&gt;一般来说这里直接就是数据区了。但是也可以增加一些拓展功能包头，比如可以拿&lt;a href=&quot;http://www.zlib.net/&quot;&gt;zlib&lt;/a&gt;或者&lt;a href=&quot;https://code.google.com/p/snappy/&quot;&gt;Snappy&lt;/a&gt;做数据压缩，再或者拿&lt;a href=&quot;http://www.openssl.org/&quot;&gt;openssl&lt;/a&gt;、&lt;a href=&quot;https://boringssl.googlesource.com/boringssl/&quot;&gt;boringssl&lt;/a&gt;或者&lt;a href=&quot;http://www.cryptopp.com/&quot;&gt;Crypto++&lt;/a&gt;来做加解密。有点像&lt;a href=&quot;http://zh.wikipedia.org/wiki/Ipv6&quot;&gt;IPv6&lt;/a&gt;的&lt;a href=&quot;http://baike.baidu.com/view/5228.htm?fr=aladdin#8_3&quot;&gt;扩展包头&lt;/a&gt;。&lt;/p&gt;
+
+&lt;h2 id=&quot;section-12&quot;&gt;最后&lt;/h2&gt;
+&lt;p&gt;这些想法最终我会尝试一个实现放在github上，实现过程中可能会碰到一些问题会导致这些想法的细微变更。届时会同步更新到blog里。并且在单元测试和压力测试通过后会把地址更新到这里。&lt;/p&gt;
+
+&lt;p&gt;GitHub地址: https://github.com/owt5008137/libatbus&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Written with &lt;a href=&quot;https://stackedit.io/&quot;&gt;StackEdit&lt;/a&gt;.&lt;/p&gt;
+&lt;/blockquote&gt;</content><category term="libatbus" /><category term="cxx" /><category term="bus" /><category term="rpc" /><category term="cpp" /><category term="c++" /><summary>关于BUS通信系统的一些思考（二）</summary></entry><entry><title>关于BUS通信系统的一些思考（一）</title><link href="/article/2014-12-02/thinking_bus_1.html" rel="alternate" type="text/html" title="关于BUS通信系统的一些思考（一）" /><published>2014-12-02T00:00:00+08:00</published><updated>2014-12-02T00:00:00+08:00</updated><id>/article/2014-12-02/thinking_bus_1</id><content type="html" xml:base="/article/2014-12-02/thinking_bus_1.html">&lt;h2 id=&quot;section&quot;&gt;目录&lt;/h2&gt;
+&lt;nav class=&quot;toc&quot;&gt;
+&lt;ul id=&quot;markdown-toc&quot;&gt;
+  &lt;li&gt;&lt;a href=&quot;#section&quot; id=&quot;markdown-toc-section&quot;&gt;目录&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#section-1&quot; id=&quot;markdown-toc-section-1&quot;&gt;概述&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#bus&quot; id=&quot;markdown-toc-bus&quot;&gt;静态共享内存通道BUS&lt;/a&gt;    &lt;ul&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-2&quot; id=&quot;markdown-toc-section-2&quot;&gt;单机节点间通信&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-3&quot; id=&quot;markdown-toc-section-3&quot;&gt;跨机进程间通信&lt;/a&gt;&lt;/li&gt;
+      &lt;li&gt;&lt;a href=&quot;#section-4&quot; id=&quot;markdown-toc-section-4&quot;&gt;总结&lt;/a&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#bus-1&quot; id=&quot;markdown-toc-bus-1&quot;&gt;动态共享内存通道BUS&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#zeromq1&quot; id=&quot;markdown-toc-zeromq1&quot;&gt;高性能开源消息队列组件- &lt;a href=&quot;http://www.zeromq.org&quot;&gt;ZeroMQ&lt;/a&gt;&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#bus--dbushttpenwikipediaorgwikid-busdbus&quot; id=&quot;markdown-toc-bus--dbushttpenwikipediaorgwikid-busdbus&quot;&gt;开源BUS组件- &lt;a href=&quot;http://en.wikipedia.org/wiki/D-Bus&quot;&gt;D—Bus&lt;/a&gt;&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;#bus-2&quot; id=&quot;markdown-toc-bus-2&quot;&gt;其他BUS系统&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;/nav&gt;
+
+&lt;h2 id=&quot;section-1&quot;&gt;概述&lt;/h2&gt;
+&lt;p&gt;如何保证一个进程或线程能安全稳定地把一段消息发送到另一个进程和线程，甚至是另一台机器的进程或线程，再或是要通过代理转发到另一个进程或线程，一直是一个比较麻烦的问题。&lt;/p&gt;
+
+&lt;p&gt;最近看了一些和BUS系统有关的东西。对于游戏服务器集群所使用的BUS通信系统有一些想法和思路，但是由于我对其他类型的业务和框架不是很熟悉，有些想法可能仅是站在游戏服务端的立场上，所以可能有些地方还有一些局限性。&lt;/p&gt;
+
+&lt;p&gt;BUS系统在我最理想的状态是，只需要两方的ID，发送屏蔽消息流转细节（废话，现在是个这种系统就有这功能），连接关系尽量简单，按需可用，尽量保证可靠性，更要的是逻辑简单。但是一直没找到一个特别完美的解决方案。&lt;/p&gt;
+
+&lt;p&gt;一些概念性的东西直接维基百科即可，比如&lt;a href=&quot;http://zh.wikipedia.org/wiki/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97&quot;&gt;消息队列&lt;/a&gt;,我这里就不再另外贴概念了。&lt;/p&gt;
+
+&lt;h2 id=&quot;bus&quot;&gt;静态共享内存通道BUS&lt;/h2&gt;
+&lt;p&gt;首先是我们公司这里所采用的BUS公共组件是基于共享内存的。&lt;br /&gt;
+整体的设计结构大致分为两种，&lt;strong&gt;一种是同一物理机下的进程间通信&lt;/strong&gt;，&lt;strong&gt;另一种是不同物理机进程间的通信&lt;/strong&gt;。&lt;/p&gt;
+
+&lt;h3 id=&quot;section-2&quot;&gt;单机节点间通信&lt;/h3&gt;
+&lt;p&gt;每个节点都有一个32位的ID，然后每两个节点之间都会建立两条通道。&lt;br /&gt;
+&lt;code class=&quot;highlighter-rouge&quot;&gt;sequence
+节点A-&amp;gt;节点B: 通道一：消息从A流向B
+节点B-&amp;gt;节点A: 通道二：消息从B流向A
+&lt;/code&gt;&lt;br /&gt;
+如上图所展示，对节点A来说，通道一是发送节点，通道二是接收节点；对节点B而言，通道一是接收节点，通道二是发送节点。&lt;/p&gt;
+
+&lt;p&gt;同时，这里的&lt;strong&gt;通道由共享内存&lt;/strong&gt;构建，这么做的好处是即便程序崩溃了，消息也不会丢失。另外节点对消息的处理使用&lt;em&gt;无锁队列&lt;/em&gt;实现。&lt;/p&gt;
+
+&lt;p&gt;现在无锁队列已经有很多种实现了，云峰曾经写过一些&lt;a href=&quot;http://blog.codingnow.com/2012/06/dev_note_21.html&quot;&gt;分享&lt;/a&gt;,他的skynet&lt;sup id=&quot;fnref:skynet&quot;&gt;&lt;a href=&quot;#fn:skynet&quot; class=&quot;footnote&quot;&gt;1&lt;/a&gt;&lt;/sup&gt;里也有一个GCC下的进程间通信的&lt;a href=&quot;https://github.com/cloudwu/skynet/blob/master/skynet-src/skynet_mq.c&quot;&gt;无锁队列实现&lt;/a&gt;，这种实现很像zeromq&lt;sup id=&quot;fnref:zeromq&quot;&gt;&lt;a href=&quot;#fn:zeromq&quot; class=&quot;footnote&quot;&gt;2&lt;/a&gt;&lt;/sup&gt;的&lt;a href=&quot;http://api.zeromq.org/3-2:zmq-inproc&quot;&gt;inproc协议&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;上面这些无锁队列都是运用于进程内存的，还有可以运用于共享内存的例子，具体可以参照gaccob的blog&lt;a href=&quot;http://www.gaccob.com/?p=626&quot;&gt;《游戏服务器系列（1）——无锁的共享内存通信》&lt;/a&gt;。或是boost&lt;sup id=&quot;fnref:boost&quot;&gt;&lt;a href=&quot;#fn:boost&quot; class=&quot;footnote&quot;&gt;3&lt;/a&gt;&lt;/sup&gt;库里的&lt;a href=&quot;http://www.boost.org/libs/interprocess&quot;&gt;进程间通信&lt;/a&gt;部分和&lt;a href=&quot;http://www.boost.org/libs/lockfree&quot;&gt;无锁容器&lt;/a&gt;部分。&lt;/p&gt;
+
+&lt;p&gt;但是由于这里的BUS都是单读单写，所以实现起来也比较简单暴力。并且通信和socket一样是&lt;strong&gt;面向连接&lt;/strong&gt;的。&lt;/p&gt;
+
+&lt;h3 id=&quot;section-3&quot;&gt;跨机进程间通信&lt;/h3&gt;
+&lt;p&gt;上面已经解决了单机进程间通信，然后要解决跨机器通信的时候不得不借助网络，为了减少网络节点铺成网状，设计了一个代理节点。&lt;/p&gt;
+
+&lt;p&gt;代理节点会监听端口，进行消息转发，这样就把内部的多个节点对外都收敛到了代理结点上。同时对每个对外的节点设计了一个缓存通道，并且对消息编号，发出的消息如果没有回执尝试重发，收到重复序号的消息则忽略。&lt;br /&gt;
+这样保证了只要节点发送接口返回成功，消息就一定不会丢，一定存在再某个信道里，并且消息由序号保证不重复。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-sequence&quot;&gt;节点A-&amp;gt;物理机一代理节点: 共享内存通道
+物理机一代理节点-&amp;gt;物理机二代理节点: 网络通道
+物理机二代理节点-&amp;gt;节点B: 共享内存通道
+节点B-&amp;gt;物理机二代理节点: 共享内存通道
+物理机二代理节点-&amp;gt;物理机一代理节点: 网络通道
+物理机一代理节点-&amp;gt;节点A: 共享内存通道
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&quot;section-4&quot;&gt;总结&lt;/h3&gt;
+&lt;p&gt;这种设计方式非常简单高效，而且最大的优点是保证里消息的可靠性。但是有两个问题，第一个问题是节点间两两互相建立信道，意味着信道很多，而且是网状的。虽然在物理机之间通信的时候做过一次收敛，但是内部还是网状的连接，同时为了维持这些信道，内存开销不小。&lt;br /&gt;
+另一个问题就是标题里提到的静态，至于为什么叫&lt;strong&gt;静态&lt;/strong&gt;的呢？因为节点连接的每个通道都要事先建立。所以这也就引出了接下来我想谈到的动态共享内存BUS。&lt;/p&gt;
+
+&lt;h2 id=&quot;bus-1&quot;&gt;动态共享内存通道BUS&lt;/h2&gt;
+&lt;p&gt;为了解决&lt;strong&gt;静态&lt;/strong&gt;的问题，我们这的一位专家设计了动态共享内存BUS系统。其实原理很简单，就是再静态共享内存通道的基础上，给代理节点增加通道管理功能。&lt;/p&gt;
+
+&lt;p&gt;首先所有共享内存通道都由代理节点分配和管理，管理过程大致分几步：&lt;br /&gt;
+1. 代理节点通过网络监听管理端口&lt;br /&gt;
+2. 当子节点上线时连接到代理节点管理端口，发送注册消息，代理节点分配消息通道&lt;br /&gt;
+3. 当子节点之间通信时首先检查本地有没有直连通道，有的话通过直连通道发送消息，否则发给代理节点，由代理节点转发&lt;br /&gt;
+4. 代理节点收到消息转发请求以后先检测两边通信的节点是否都是下属的子节点，如果是就新建两个通道，并通知子节点下次通信用这两个通道作直连通道，然后转发消息。否则就把消息转发到远程机器的代理节点&lt;/p&gt;
+
+&lt;p&gt;这么做简单地说就是让代理节点来管理共享内存通道，但是带来地另一个问题就是程序恢复时怎么恢复通道。一种方式时通道信息也记录到共享内存里去，但是这边地实现比较暴力一点，会根据通信双方节点ID和代理节点配置算出来一个唯一共享内存ID。只要配置不变，ID不变，共享内存Key是不变的。&lt;/p&gt;
+
+&lt;p&gt;这种模式gaccob也提供了一个简单的例子。&lt;a href=&quot;http://www.gaccob.com/?p=1378&quot;&gt;《游戏服务器系列（6）——共享内存通信之二》&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;另一个问题就是为了性能这里的实现里网络通信没有把转发消息缓存起来，所以跨机器通信的消息由丢失的风险。&lt;/p&gt;
+
+&lt;p&gt;另一个问题就是还是没有解决单机内&lt;strong&gt;网状的共享内存通道连接&lt;/strong&gt;关系。&lt;/p&gt;
+
+&lt;h2 id=&quot;zeromq1&quot;&gt;高性能开源消息队列组件- &lt;a href=&quot;http://www.zeromq.org&quot;&gt;ZeroMQ&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;对于BUS系统和消息队列，也有一些很有名气的开源组件。比如这个，&lt;a href=&quot;http://www.zeromq.org&quot;&gt;ZeroMQ&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;ZeroMQ最大的特点就是是面向消息的，和前面提到的两种还有socket的通信方式完全不一样。&lt;/p&gt;
+
+&lt;p&gt;不过不得不说，ZeroMQ确实把通信模式总结得非常好，支持请求-回应模式、发布-订阅模式、路由消息等。而且它的上层API完成了一个非常重要的功能，就是使用zmq的ROUTER sock可以把接收方路由节点可以收敛到一个端点上。&lt;/p&gt;
+
+&lt;p&gt;但是它的面向消息的设计带来一个问题就是，逻辑过于重了。特别是它的很多模式都是基于&lt;em&gt;同步操作&lt;/em&gt;的，而且&lt;strong&gt;弱化了连接&lt;/strong&gt;的概念。在要构建服务器的需要的异步操作里不得不用一些底层的操作，并且它的通信模式对消息内容还有些&lt;strong&gt;潜规则&lt;/strong&gt;（比如REQ消息会有一个节点名称包头和一个空包头、路由消息会有一个节点名称包头等）&lt;/p&gt;
+
+&lt;p&gt;另一个问题就是跨进程通信只支持网络socket和Unix socket。虽然ZeroMQ内部&lt;strong&gt;提供了命名节点的失败重发&lt;/strong&gt;机制，但是仍然避免不了&lt;strong&gt;进程崩溃会导致包丢失&lt;/strong&gt;的问题。&lt;/p&gt;
+
+&lt;p&gt;再一个问题就是即便使用Unix socket，性能还是比共享内存差不少。在写这篇博文前我按照前面第二种通信模式写了一个对&lt;strong&gt;zeromq的压力测试&lt;/strong&gt;，具体代码可见这里&lt;a href=&quot;https://gist.github.com/owt5008137/72c3fd5f4bb63a863641&quot;&gt;https://gist.github.com/owt5008137/72c3fd5f4bb63a863641&lt;/a&gt;。压测结果在这里&lt;a href=&quot;http://api.owent.net/resource/doc/link/zerqmq%20%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95%E6%8A%A5%E5%91%8A.xlsx&quot;&gt;http://api.owent.net/resource/doc/link/zerqmq%20%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95%E6%8A%A5%E5%91%8A.xlsx&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;相对与前面共享内存通信而言，&lt;strong&gt;&lt;em&gt;大消息包时性能和前面的接近，小消息包时大约是前面共享内存性能的二分之一到三分之一&lt;/em&gt;&lt;/strong&gt;。而游戏进程间通信的消息体大多数情况下不大。&lt;/p&gt;
+
+&lt;p&gt;不过我个人觉得，最重要的问题还是消息的可靠性问题。&lt;/p&gt;
+
+&lt;h2 id=&quot;bus--dbushttpenwikipediaorgwikid-busdbus&quot;&gt;开源BUS组件- &lt;a href=&quot;http://en.wikipedia.org/wiki/D-Bus&quot;&gt;D—Bus&lt;/a&gt;&lt;sup id=&quot;fnref:dbus&quot;&gt;&lt;a href=&quot;#fn:dbus&quot; class=&quot;footnote&quot;&gt;4&lt;/a&gt;&lt;/sup&gt;&lt;/h2&gt;
+&lt;p&gt;D-Bus已经用于Gnome、Qt等一些知名的开源项目。这个组件我没有太深入的研究，一方面是由于其过于复杂了，另一方面虽然他是面向连接的，但是貌似依然&lt;strong&gt;不支持共享内存&lt;/strong&gt;，所以估计性能上不会比ZeroMQ好。另外就是它早期被用作本机进程间通信的，跨机情况下不知道稳定性怎么样。&lt;/p&gt;
+
+&lt;p&gt;另外D-Bus通过发送不成功时dump消息到文件以下次发送来保证消息可靠性。这种做法可以很容易想到在连接闪断的时候CPU会飙高。&lt;/p&gt;
+
+&lt;p&gt;不过话说回来，D-Bus确实时一个完整的Bus通信系统，有完善的监控机制、完整的消息服务、完善的功能（虽然支持的模式不像ZeroMQ一样那么多）。&lt;/p&gt;
+
+&lt;p&gt;但是也是因为它太完善了，所以也就太庞大了。导致我不太喜欢。&lt;br /&gt;
+另外这里有关于D-Bus的性能测试报告，看起来性能不怎么样啊。http://pvanhoof.be/blog/index.php/2010/05/13/ipc-performance-the-report&lt;/p&gt;
+
+&lt;h2 id=&quot;bus-2&quot;&gt;其他BUS系统&lt;/h2&gt;
+&lt;p&gt;Redhat搞了个dbus的分支&lt;a href=&quot;http://en.wikipedia.org/wiki/Kdbus&quot;&gt;&lt;strong&gt;kdbus&lt;/strong&gt;&lt;/a&gt;&lt;sup id=&quot;fnref:kdbus&quot;&gt;&lt;a href=&quot;#fn:kdbus&quot; class=&quot;footnote&quot;&gt;5&lt;/a&gt;&lt;/sup&gt;，貌似把这玩意整进linux内核了，据说性能会进一步提升。但是总感觉还要过内核，再加上上面的D-Bus性能测试报告，略微担忧。&lt;/p&gt;
+
+&lt;p&gt;另外，还看到个Android上的&lt;strong&gt;Binder&lt;/strong&gt;，说是消息也是放在共享内存中，消息传递时是通过切换指针来完成，甚至通道切换都不要进行拷贝。这确实是个比较有意思的做法，但是需要系统提供驱动设备文件支持,并且所有节点共享binder的数据区。这就要求必须由比较复杂的内存管理机制来管理数据节点。而且貌似Android里实现的binder管理的内存也不是很大。&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;接下文…&lt;br /&gt;
+Written with &lt;a href=&quot;https://stackedit.io/&quot;&gt;StackEdit&lt;/a&gt;.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;div class=&quot;footnotes&quot;&gt;
+  &lt;ol&gt;
+    &lt;li id=&quot;fn:skynet&quot;&gt;
+      &lt;p&gt;skynet: 云峰设计的基于c和lua的开原游戏服务器框架，https://github.com/cloudwu/skynet &lt;a href=&quot;#fnref:skynet&quot; class=&quot;reversefootnote&quot;&gt;&amp;#8617;&lt;/a&gt;&lt;/p&gt;
+    &lt;/li&gt;
+    &lt;li id=&quot;fn:zeromq&quot;&gt;
+      &lt;p&gt;zeromq: 一个高效面向消息的消息队列组件，&lt;a href=&quot;http://www.zeromq.org&quot;&gt;http://www.zeromq.org&lt;/a&gt; &lt;a href=&quot;#fnref:zeromq&quot; class=&quot;reversefootnote&quot;&gt;&amp;#8617;&lt;/a&gt;&lt;/p&gt;
+    &lt;/li&gt;
+    &lt;li id=&quot;fn:boost&quot;&gt;
+      &lt;p&gt;boost: 一个按照stl规范编写的跨平台高性能C++库，也被称为准STL库，很多C++标准特性都是由这里面提炼而来，http://www.boost.org &lt;a href=&quot;#fnref:boost&quot; class=&quot;reversefootnote&quot;&gt;&amp;#8617;&lt;/a&gt;&lt;/p&gt;
+    &lt;/li&gt;
+    &lt;li id=&quot;fn:dbus&quot;&gt;
+      &lt;p&gt;D-Bus: 一个用于Gnome、Qt的开源Bus系统解决方案，http://www.freedesktop.org/Software/dbus &lt;a href=&quot;#fnref:dbus&quot; class=&quot;reversefootnote&quot;&gt;&amp;#8617;&lt;/a&gt;&lt;/p&gt;
+    &lt;/li&gt;
+    &lt;li id=&quot;fn:kdbus&quot;&gt;
+      &lt;p&gt;kdbus: 内核态D-Bus接口系统，https://github.com/gregkh/kdbus &lt;a href=&quot;#fnref:kdbus&quot; class=&quot;reversefootnote&quot;&gt;&amp;#8617;&lt;/a&gt;&lt;/p&gt;
+    &lt;/li&gt;
+  &lt;/ol&gt;
+&lt;/div&gt;</content><category term="libatbus" /><category term="cxx" /><category term="bus" /><category term="rpc" /><category term="cpp" /><category term="c++" /><summary>目录
+
+
+  目录</summary></entry></feed>

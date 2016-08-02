@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>关于BUS通信系统的一些思考（三） • atframework</title>
+    <meta name="description" content="
+  接上文关于bus通信系统的一些思考（二）
+
+  之前的文章内容应该要有修订，但是并没有更新到blog里，而是直接写在了libatbus的文档里
+
+
+">
+    <meta name="keywords" content="libatbus, cxx, bus, rpc, cpp, c++">
+    
+    
+	<!-- Twitter Cards -->
+	<meta name="twitter:title" content="关于BUS通信系统的一些思考（三）">
+	<meta name="twitter:description" content="
+  接上文关于bus通信系统的一些思考（二）
+
+  之前的文章内容应该要有修订，但是并没有更新到blog里，而是直接写在了libatbus的文档里
+
+
+">
+	
+	
+	
+	<meta name="twitter:card" content="summary">
+	<meta name="twitter:image" content="/images/logo-m.png">
+	
+	<!-- Open Graph -->
+	<meta property="og:locale" content="cn">
+	<meta property="og:type" content="article">
+	<meta property="og:title" content="关于BUS通信系统的一些思考（三）">
+	<meta property="og:description" content="
+  接上文关于bus通信系统的一些思考（二）
+
+  之前的文章内容应该要有修订，但是并没有更新到blog里，而是直接写在了libatbus的文档里
+
+
+">
+	<meta property="og:url" content="/article/2015-11-08/thinking_bus_3.html">
+	<meta property="og:site_name" content="atframework">
+
+    <link rel="canonical" href="/article/2015-11-08/thinking_bus_3.html">
+
+    <link href="/atom.xml" type="application/atom+xml" rel="alternate" title="atframework Atom Feed">
+    <link href="/sitemap.xml" type="application/xml" rel="sitemap" title="Sitemap">
+
+    <meta name="HandheldFriendly" content="True">
+    <meta name="MobileOptimized" content="320">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="cleartype" content="on">
+
+    <link rel="stylesheet" href="/css/main.css">
+    <!-- HTML5 Shiv and Media Query Support for IE -->
+    <!--[if lt IE 9]>
+      <script src="/js/vendor/html5shiv.min.js"></script>
+      <script src="/js/vendor/respond.min.js"></script>
+    <![endif]-->
+
+  </head>
+
+  <body id="js-body">
+    <!--[if lt IE 9]><div class="upgrade notice-warning"><strong>Your browser is quite old!</strong> Why not <a href="http://whatbrowser.org/">upgrade to a newer one</a> to better enjoy this site?</div><![endif]-->
+
+    <header id="masthead">
+  <div class="inner-wrap">
+    <a href="/" class="site-title">atframework</a>
+    <nav role="navigation" class="menu top-menu">
+        
+
+
+
+
+<ul class="menu-item">
+	<li class="home"><a href="/">atframework</a></li>
+	
+    
+    <li><a href="/cn/quick_start/" >快速上手</a></li>
+  
+    
+    <li><a href="/cn/document/" >文档</a></li>
+  
+    
+    <li><a href="/cn/projects/" >项目列表</a></li>
+  
+    
+    <li><a href="/cn/articles/" >技术分享</a></li>
+  
+    
+    <li><a href="/cn/about/" >关于</a></li>
+  
+
+  
+</ul>
+    </nav>
+  </div><!-- /.inner-wrap -->
+</header><!-- /.masthead -->
+    
+
+
+
+
+<nav role="navigation" id="js-menu" class="sliding-menu-content">
+  <h5>atframework <span>目录</span></h5>
+  <ul class="menu-item">
+    <li>
+      <a href="/cn/quick_start/">
+        
+        <div class="title">快速上手</div>
+        
+      </a>
+    </li><li>
+      <a href="/cn/document/">
+        
+        <div class="title">文档</div>
+        
+      </a>
+    </li><li>
+      <a href="/cn/projects/">
+        
+        <div class="title">项目列表</div>
+        
+      </a>
+    </li><li>
+      <a href="/cn/articles/">
+        
+        <div class="title">技术分享</div>
+        
+      </a>
+    </li><li>
+      <a href="/cn/about/">
+        
+        <div class="title">关于</div>
+        
+      </a>
+    </li>
+    
+  </ul>
+</nav>
+<button type="button" id="js-menu-trigger" class="sliding-menu-button lines-button x2" role="button" aria-label="Toggle Navigation">
+  <span class="nav-lines"></span>
+</button>
+
+<div id="js-menu-screen" class="menu-screen"></div>
+
+
+    <div id="page-wrapper">
+      <div id="main" role="main">
+	<article class="wrap" itemscope itemtype="http://schema.org/Article">
+		
+		
+  <nav class="breadcrumbs">
+    <span itemscope itemtype="http://data-vocabulary.org/Breadcrumb">
+      <a href="" itemprop="url">
+        <span itemprop="title">Home</span>
+      </a> › 
+    <span itemscope itemtype="http://data-vocabulary.org/Breadcrumb">
+      <a href="/article/" itemprop="url">
+        <span itemprop="title">Article</span>
+      </a>
+    </span>
+  </nav><!-- /.breadcrumbs -->
+
+		<div class="page-title">
+			<h1>关于BUS通信系统的一些思考（三）</h1>
+		</div>
+		<div class="inner-wrap">
+			<div id="content" class="page-content" itemprop="articleBody">
+				<blockquote>
+  <p><a href="thinking_bus_2.html">接上文关于bus通信系统的一些思考（二）</a></p>
+
+  <p>之前的文章内容应该要有修订，但是并没有更新到blog里，而是直接写在了<a href="https://github.com/owt5008137/libatbus">libatbus</a>的文档里</p>
+</blockquote>
+
+<h2 id="section">目录</h2>
+<nav class="toc">
+<ul id="markdown-toc">
+  <li><a href="#section" id="markdown-toc-section">目录</a></li>
+  <li><a href="#section-1" id="markdown-toc-section-1">前言</a></li>
+  <li><a href="#section-2" id="markdown-toc-section-2">节点关系的初步想法</a>    <ul>
+      <li><a href="#section-3" id="markdown-toc-section-3">协议规划</a></li>
+      <li><a href="#section-4" id="markdown-toc-section-4">接口和结构规划</a></li>
+    </ul>
+  </li>
+</ul>
+
+</nav>
+
+<h2 id="section-1">前言</h2>
+<p>好久没写总结啦，最近一段时间比较忙，抽出的空闲时间都在不断完善之前提到的一个进程间通信lib的想法和实现（<a href="https://github.com/owt5008137/libatbus">libatbus</a>）。</p>
+
+<p>因为这个想法从提出来后实现了共享内存通信的实现后，一直没抽出空来继续后面的内容。而且做得过程中发现，这比之前想象的还是要复杂一些，一个人的空闲时间很难做到非常的完善，只能先有个实现，以后再一点点地改善。毕竟人家TX两个人全职做了两年才能做到一个比较完整的解决方案，而且还不跨平台。我这个虽然有一些非核心的部分使用开源组件，能少很多工作量，但是要做到跨平台并且只是业余时间搞的话还是得慢慢来。</p>
+
+<p>这段时间的完善后，所有最初预想的通信方式都已经实现。包括<strong>内存，共享内存，tcp/ipv4，tcp/ipv6，tcp/dns，unix sock</strong>。这几种方式。并且为以后可能的一些通信方式做了少量预留。同时完成了同时支持使用<strong>自定义的简单环形队列缓冲区</strong>（省去复杂内存块管理的CPU消耗，内存换CPU）和使用<strong>动态缓冲区</strong>（mallo/free）。之所以不实现复杂的内存管理是由于tcmalloc和jemalloc已经足够优秀。如果需要复杂高效的动态内存管理，用这两个东西替换掉ptmalloc或其他系统自带的内存管理器就已经足够高效。</p>
+
+<p>更总要的是，这段时间我还对目前已实现的功能都做了比较完整的<strong>单元测试</strong>。并且我也对自己的单元测试的框架做了少量优化。在单元测试的过程中确实能发现很多低级的细节问题，特别是对重构数据结构和一些流程细节的帮助非常大。另外由于使用的libuv在Windows下只支持MSVC，而且目前最新版本<strong><em>Windows下的pipe类型通信不能正常工作</em></strong>，所以我关闭了Windows版本下的<strong><em>unix sock</em></strong>类型的单元测试。</p>
+
+<p>剩下的最重要的就是实现节点关系相关的逻辑代码了。</p>
+
+<h2 id="section-2">节点关系的初步想法</h2>
+<p>本来想直接开写得，但是实现过程中发现有点混乱。所以还是需要整理并理清下流程和思路。本文最重要的是帮自己理清思路，所以列一个提纲过来，会实时补充（也会优先补在<a href="https://github.com/owt5008137/libatbus">libatbus</a>的文档里），并且语言必定不会严谨。大纲如下：</p>
+
+<h3 id="section-3">协议规划</h3>
+
+<ol>
+  <li>数据转发协议请求
+    <ul>
+      <li>如果目标自身直接接收，返回成功否则路由信息+1，进入后续流程</li>
+      <li>ttl+1，判定跳数过多则返回失败</li>
+      <li>如果目标节点子节点子域
+        <ul>
+          <li>不存在连接完成返回错误</li>
+          <li>直接转发子节点</li>
+          <li>如果发送方是子节点,允许子节点直连,选取最优通道通知建立子节点直连通道</li>
+        </ul>
+      </li>
+      <li>如果目标是兄弟节点或兄弟节点子域
+        <ul>
+          <li>如果直连通道连接建立完成，直接转发</li>
+          <li>否则发给父节点</li>
+        </ul>
+      </li>
+      <li>其他情况发给父节点或出错</li>
+    </ul>
+  </li>
+  <li>数据转发协议响应
+    <ul>
+      <li>反向发回，忽视错误</li>
+    </ul>
+  </li>
+  <li>注册协议请求（握手阶段）
+    <ul>
+      <li>附带自身pid，监听信息，机器标识</li>
+    </ul>
+  </li>
+  <li>注册协议回包（握手阶段）
+    <ul>
+      <li>成功则连接加入endpoint</li>
+      <li>错误则移除连接</li>
+      <li>如果错误码ID冲突则node下线</li>
+    </ul>
+  </li>
+  <li>节点同步协议
+    <ul>
+      <li>定时拉取</li>
+    </ul>
+  </li>
+  <li>新连接协议
+    <ul>
+      <li>指定子节点A，连接子节点B</li>
+    </ul>
+  </li>
+  <li>Ping协议请求
+    <ul>
+      <li>Ping测试次数+1，如果超过容错则节点下线</li>
+    </ul>
+  </li>
+  <li>Ping协议回包
+    <ul>
+      <li>重置ping测试次数0</li>
+      <li>记录延迟</li>
+    </ul>
+  </li>
+</ol>
+
+<h3 id="section-4">接口和结构规划</h3>
+
+<ol>
+  <li>atbus节点（node）
+    <ul>
+      <li>状态
+        <ul>
+          <li>未初始化</li>
+          <li>初始化完成</li>
+          <li>丢失父节点</li>
+          <li>正在注册到父节点</li>
+          <li>注册完成</li>
+          <li>正在关闭</li>
+        </ul>
+      </li>
+      <li>API:获取进程ID: getpid</li>
+      <li>API:获取主机名: gethostname</li>
+      <li>配置:
+        <ul>
+          <li>节点逻辑:ttl</li>
+          <li>节点逻辑:允许子节点直连</li>
+          <li>节点逻辑:是否需要全局路由表（控制是否发送节点同步协议）</li>
+          <li>节点逻辑:消息循环次数限制（防止单一通道繁忙导致其他通道饥饿）</li>
+          <li>节点逻辑:事件管理对象（ev_loop）</li>
+          <li>节点逻辑:子节点掩码</li>
+          <li>网络:backlog</li>
+          <li>网络:第一次发包时间限制</li>
+          <li>节点逻辑:Ping包间隔</li>
+          <li>节点逻辑:错误容忍次数（超出次数视为下线）</li>
+          <li>网络:重试间隔（父节点断线重连间隔）</li>
+          <li>缓冲区：消息体大小</li>
+          <li>缓冲区：内存通道的接收缓冲区</li>
+          <li>缓冲区：每个连接的发送缓冲区</li>
+          <li>缓冲区：静态发送缓冲区的消息个数限制</li>
+        </ul>
+      </li>
+      <li>API:查找匹配子域节点(map,记录子域,upper_bound)</li>
+      <li>API:判定节点间最优通路</li>
+      <li>定时器
+        <ul>
+          <li>connection超时下线</li>
+          <li>父节点重连</li>
+          <li>Ping</li>
+          <li>同步协议</li>
+        </ul>
+      </li>
+      <li>回调函数
+        <ul>
+          <li>接收到消息</li>
+          <li>错误处理</li>
+          <li>完成注册</li>
+          <li>节点下线</li>
+          <li>节点上线（所有连接进入完成状态）</li>
+          <li>非法连接</li>
+        </ul>
+      </li>
+      <li>API:监听地址
+        <ul>
+          <li>可同时监听点对点IO和共享通道</li>
+          <li>初始接受的连接为命令通道，接收到注册请求后主动发起的连接为数据通道</li>
+        </ul>
+      </li>
+      <li>API:连接目标
+        <ul>
+          <li>连接内存和共享内存通道必须指定正确的目标，因为这些通道是共享的，不存在握手阶段</li>
+          <li>初始发起的连接为命令通道，连上后发起注册协议。收到注册回包后重新发起的连接为数据通道</li>
+          <li>这里建议配置上初始连接走点对点IO流通信
+            <ul>
+              <li>IO流通信即连接协议为ipv4,ipv6,dns或unix</li>
+              <li>命令变化不多，性能要求相对较低</li>
+              <li>如果初始通道是内存或共享内存通道，可能导致命令通道和数据通道是同一个</li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li>未完成的连接池（用于防止重复连接和重复发送握手包）
+        <ul>
+          <li>主动连接的address=对端监听地址，被动接受的address=对端发起地址</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>端点endpoint
+    <ul>
+      <li>id</li>
+      <li>child_mask</li>
+      <li>记录所属node</li>
+      <li>判定是否子域</li>
+      <li>add_connection</li>
+      <li>包含connection集合，区分控制命令connection和数据connection</li>
+      <li>销毁释放所有connection</li>
+      <li>选取发送通道（数据转发协议的流程）</li>
+    </ul>
+  </li>
+  <li>Connection
+    <ul>
+      <li>address</li>
+      <li>状态:
+        <ul>
+          <li>未连接</li>
+          <li>正在连接（内存通道或者共享内存通道没有这个状态）</li>
+          <li>正在握手（检测双方node的id）</li>
+          <li>正在运行</li>
+        </ul>
+      </li>
+      <li>各类connection的发送接口，proc接口，free接口</li>
+      <li>记录所属node</li>
+      <li>记录所属endpoint</li>
+      <li>连接断开、连接失败接口
+        <ul>
+          <li>如果是父节点加入重试等待队列</li>
+          <li>否则清理节点信息</li>
+          <li>关闭时如果endpoint没有可用控制命令connection或数据connection，endpoint下线（防止部分通道断开，然后数据通道被用作命令通道）<br />
+统一发送接口</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ol>
+
+<p>目前这样的设计中有一个最重要的部分是连接和握手的流程，纪要考虑子节点和父节点之间自动连接的流程和兄弟节点间由父节点通知而自动连接的过程，也要考虑手动连接兄弟节点的流程；然后连接可能会在多台物理机上的问题；还有连接部分丢失的问题。</p>
+
+<p>按照推荐的标准流程的话，如果节点之间如果只用点对点IO流，那么命令通道和数据通道会分别有一个。但是只用共享内存的话，只会有一个通道。混用的情况就更复杂了，不再详细说明。</p>
+
+<p>如果上述设计有问题的话，还需要另外在修订</p>
+
+<blockquote>
+  <p>Written with <a href="https://stackedit.io/">StackEdit</a>.</p>
+</blockquote>
+
+				<hr />
+				<footer class="page-footer">
+					
+
+
+<div class="author-image">
+	<img src="/images/owner-logo.jpg" alt="owent">
+</div><!-- ./author-image -->
+<div class="author-content">
+	<h3 class="author-name" >作者： <span itemprop="author">owent</span></h3>
+	<p class="author-bio"></p>
+</div><!-- ./author-content -->
+					
+<div class="inline-btn">
+	<a class="btn-social twitter" href="https://twitter.com/intent/tweet?text=关于BUS通信系统的一些思考（三）&amp;url=/article/2015-11-08/thinking_bus_3.html&amp;via=" target="_blank"><i class="fa fa-twitter" aria-hidden="true"></i> 分享到 Twitter</a>
+	<a class="btn-social facebook" href="https://www.facebook.com/sharer/sharer.php?u=/article/2015-11-08/thinking_bus_3.html" target="_blank"><i class="fa fa-facebook" aria-hidden="true"></i> 分享到 Facebook</a>
+	<a class="btn-social google-plus"  href="https://plus.google.com/share?url=/article/2015-11-08/thinking_bus_3.html" target="_blank"><i class="fa fa-google-plus" aria-hidden="true"></i> 分享到 Google+</a>
+</div><!-- /.share-this -->
+
+					
+
+<div class="page-meta">
+	<p>更新 <time datetime="2015-11-08T00:00:00Z" itemprop="datePublished">November 08, 2015</time></p>
+</div><!-- /.page-meta -->
+				</footer><!-- /.footer -->
+				<aside>
+					
+				</aside>
+			</div><!-- /.content -->
+		</div><!-- /.inner-wrap -->
+		
+	</article><!-- ./wrap -->
+</div><!-- /#main -->
+
+      <footer role="contentinfo" id="site-footer">
+	<nav role="navigation" class="menu bottom-menu">
+		<ul class="menu-item">
+		
+      
+			<li><a href="//atframe.work" >atframework home</a></li>
+		
+      
+			<li><a href="//github.com/atframework" >github</a></li>
+		
+		</ul>
+	</nav><!-- /.bottom-menu -->
+	<p class="copyright">&#169; 2016 <a href="">atframework</a> powered by <a href="http://jekyllrb.com" rel="nofollow">Jekyll</a> + <a href="http://mmistakes.github.io/skinny-bones-jekyll/" rel="nofollow">Skinny Bones</a>.</p>
+</footer>
+    </div>
+
+    <script src="/js/vendor/jquery-1.9.1.min.js"></script>
+    <script src="/js/main.js"></script>
+
+  </body>
+
+</html>
