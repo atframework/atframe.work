@@ -10,6 +10,7 @@ image:
   thumb:
 share: false
 ads: false
+locale: cn
 permalink: /cn/about/
 navigation:
   - title: English

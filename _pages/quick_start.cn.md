@@ -4,6 +4,7 @@ title: "快速上手"
 date: 2016-08-01T10:33:20-04:00
 modified: 2016-08-01T10:33:44-04:00
 excerpt: "atframework的快速上手文档"
+locale: cn
 image:
   feature:
   teaser:

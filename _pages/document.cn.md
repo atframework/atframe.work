@@ -4,6 +4,7 @@ title: 文档
 date: 2016-08-01T10:33:20-04:00
 modified: 2016-08-01T10:33:44-04:00
 excerpt: "atframework 的文档合集."
+locale: cn
 image:
   feature:
   teaser:

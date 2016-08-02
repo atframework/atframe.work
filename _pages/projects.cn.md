@@ -4,6 +4,7 @@ title: 项目列表
 date: 2016-08-01T10:33:20-04:00
 modified: 2016-08-01T10:33:44-04:00
 excerpt: "Projects of atframework."
+locale: cn
 image:
   feature:
   teaser:
