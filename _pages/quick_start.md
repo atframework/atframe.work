@@ -11,6 +11,11 @@ image:
 share: false
 ads: false
 permalink: /quick_start/
+navigation:
+  - title: 中文版
+    url: /cn/quick_start/
+    excerpt:
+    image:
 ---
 
 Nothing now, please see every [project](/projects/)'s example.

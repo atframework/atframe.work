@@ -1,21 +1,21 @@
 ---
 layout: article
-title: Document
+title: 文档
 date: 2016-08-01T10:33:20-04:00
 modified: 2016-08-01T10:33:44-04:00
-excerpt: "Documents of atframework."
+excerpt: "atframework 的文档合集."
 image:
   feature:
   teaser:
   thumb:
 share: false
 ads: false
-permalink: /document/
+permalink: /cn/document/
 navigation:
-  - title: 中文版
-    url: /cn/document/
+  - title: English
+    url: /document/
     excerpt:
     image:
 ---
 
-Nothing now, please goto [projects](/projects/) now.
+暂无，请先前往 [项目列表](/cn/projects/) 查看里面的sample。

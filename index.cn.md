@@ -1,6 +1,6 @@
 ---
 layout: home
-permalink: /cn
+permalink: /cn/
 title: ""
 language:
   en: /
@@ -23,13 +23,13 @@ image:
 </div>
 
 <div class="tile">
-  <h2 class="post-title">去中兴化</h2>
+  <h2 class="post-title">去中心化</h2>
   <p class="post-excerpt">所有的服务都是去中心化的，所以可以很容易地平行扩展服务器集群和服务器组。</p>
 </div>
 
 <div class="tile">
   <h2 class="post-title">可定制化</h2>
-  <p class="post-excerpt"><a href="https://github.com/atframework/atsf4g-co/blob/master/LICENSE" target="_blank">MIT协议</a>下，完全开源，所以可以自由定制服务。网关层也可以自由接入各种定制化协议。</p>
+  <p class="post-excerpt"><a href="https://github.com/atframework/atsf4g-co/blob/master/LICENSE" target="_blank">MIT协议</a>下，完全开源，可以自由定制服务。网关层也可以自由接入各种定制化协议。</p>
 </div>
 
 </div>

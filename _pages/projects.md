@@ -11,6 +11,11 @@ image:
 share: false
 ads: false
 permalink: /projects/
+navigation:
+  - title: 中文版
+    url: /cn/projects/
+    excerpt:
+    image:
 ---
 
 # utils code
@@ -37,3 +42,8 @@ Repository: https://github.com/owt5008137/libcopp
 Cross-platform and high performence cloud server solution for game based on [libatbus](https://github.com/atframework/libatbus), [libatapp](https://github.com/atframework/libatapp) and [libcopp](https://github.com/owt5008137/libcopp).
 
 Repository: https://github.com/atframework/atsf4g-co
+
+# xresloader
+Cross-platform tools to convert data from Excel to json/xml/lua/javascript/protobuf/msgpack
+
+Repository Set: https://github.com/xresloader/

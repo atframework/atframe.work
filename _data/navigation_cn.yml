@@ -1,0 +1,26 @@
+# Site navigation links
+
+- title: 快速上手
+  url: /cn/quick_start/
+  excerpt:
+  image:
+
+- title: 文档
+  url: /cn/document/
+  excerpt:
+  image:
+
+- title: 项目列表
+  url: /cn/projects/
+  excerpt:
+  image:
+
+- title: "技术分享"
+  url: /cn/articles/
+  excerpt:
+  image:
+  
+- title: 关于
+  url: /cn/about/
+  excerpt:
+  image:

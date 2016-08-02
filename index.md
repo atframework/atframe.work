@@ -6,6 +6,11 @@ language:
   cn: /cn
 image:
   feature: wood-texture-1600x800.jpg
+navigation:
+  - title: 中文版
+    url: /cn/
+    excerpt:
+    image:
 ---
 
 <div class="tiles">

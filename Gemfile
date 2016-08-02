@@ -10,4 +10,3 @@ gem "jekyll-feed"
 
 gem "jekyll-paginate"
 gem 'github-pages'
-gem "redcarpet"

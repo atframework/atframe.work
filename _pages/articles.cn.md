@@ -1,10 +1,10 @@
 ---
 layout: archive
-title: "Technology Articles"
-permalink: /articles/
+title: "技术文章集合"
+permalink: /cn/articles/
 navigation:
-  - title: 中文版
-    url: /cn/articles/
+  - title: English
+    url: /articles/
     excerpt:
     image:
 ---

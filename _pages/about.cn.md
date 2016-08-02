@@ -1,26 +1,25 @@
 ---
 layout: article
-title: About
+title: 关于
 date: 2016-08-01T10:33:20-04:00
 modified: 2016-08-01T10:33:44-04:00
-excerpt: "This is the atframework about page."
+excerpt: "atframework 框架的简要信息"
 image:
   feature:
   teaser:
   thumb:
 share: false
 ads: false
-permalink: /about/
-
+permalink: /cn/about/
 navigation:
-  - title: 中文版
-    url: /cn/about/
+  - title: English
+    url: /about/
     excerpt:
     image:
 ---
 
-This's a service framework for game server using libatbus, libatapp, libcopp and etc.
+使用 libatbus, libatapp, libcopp 等搭建游戏服务器集群框架的解决方案。
 
-Author: [owent](https://owent.net)
+作者: [owent](https://owent.net)
 
 Email: [admin@owent.net](mailto:admin@owent.net) or [owt5008137@live.com](mailto:owt5008137@live.com)

@@ -48,7 +48,7 @@ locales:
     toc: "目录"
     written_by: "作者："
     updated: "更新"
-    share: "分享"
+    share: "分享到"
     about: "关于"
   zh_CN:
     <<: *DEFAULT_ZH      # use Chinese translation for zh_CN
