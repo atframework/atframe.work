@@ -5,7 +5,7 @@ title: ""
 language:
   cn: /cn
 image:
-  feature: wood-texture-1600x800.jpg
+  feature: background.jpg
 navigation:
   - title: 中文版
     url: /cn/

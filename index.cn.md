@@ -6,7 +6,7 @@ language:
   en: /
 locale: cn
 image:
-  feature: wood-texture-1600x800.jpg
+  feature: background.jpg
 navigation:
   - title: English
     url: /
