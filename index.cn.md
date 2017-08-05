@@ -23,8 +23,8 @@ navigation:
 
 <div class="tile">
   <h2 class="post-title">高性能</h2>
-  <p class="post-excerpt">使用共享内存通道时有<strong>5千万QPS</strong>或<strong>1.5+GB</strong>的吞吐量。使用TCP网络通道时有<strong>2千五百万+的QPS</strong>或<strong>600+MB/s</strong>的吞吐量.
-  详情见<a href="https://github.com/atframework/libatbus" target="_blank">libatbus</a>的<a href="https://github.com/atframework/libatbus/blob/master/doc/Benchmark.md" target="_blank">压力测试</a></p>
+  <p class="post-excerpt">使用共享内存通道时有<strong>5000K+ QPS</strong>或<strong>1.5+GB</strong>的吞吐量。使用TCP网络通道时有<strong>2500K+ QPS</strong>或<strong>600+MB/s</strong>的吞吐量.
+  详情见<a href="https://github.com/atframework/libatbus" target="_blank">libatbus</a>的<a href="https://github.com/atframework/libatbus/blob/master/docs/Benchmark.md" target="_blank">压力测试</a></p>
 </div>
 
 <div class="tile">

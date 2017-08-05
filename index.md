@@ -22,8 +22,8 @@ navigation:
 
 <div class="tile">
   <h2 class="post-title">High Performence</h2>
-  <p class="post-excerpt"><strong>50+Million QPS</strong> or <strong>1.5+GB/s</strong> when using shared memory channel and about <strong>25+Million QPS</strong> or <strong>600+MB/s</strong> when using tcp channel.
-  See <a href="https://github.com/atframework/libatbus/blob/master/doc/Benchmark.md" target="_blank">benchmark</a> of <a href="https://github.com/atframework/libatbus" target="_blank">libatbus</a> for detail.</p>
+  <p class="post-excerpt"><strong>5000K+ QPS</strong> or <strong>1.5+GB/s</strong> when using shared memory channel and about <strong>2500K+ QPS</strong> or <strong>600+MB/s</strong> when using tcp channel.
+  See <a href="https://github.com/atframework/libatbus/blob/master/docs/Benchmark.md" target="_blank">benchmark</a> of <a href="https://github.com/atframework/libatbus" target="_blank">libatbus</a> for detail.</p>
 </div>
 
 <div class="tile">

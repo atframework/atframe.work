@@ -47,3 +47,15 @@ Repository: https://github.com/atframework/atsf4g-co
 Cross-platform tools to convert data from Excel to json/xml/lua/javascript/protobuf/msgpack
 
 Repository Set: https://github.com/xresloader/
+
+# AtgwInnerCli-CSharp
+
+https://github.com/atframework/AtgwInnerCli-CSharp
+
+atgateway wrapper for C#(support Unity 3D)
+
+# Atapp-CSharp
+
+https://github.com/atframework/Atapp-CSharp
+
+libatapp wrapper for C#(support .net core and .net framework)

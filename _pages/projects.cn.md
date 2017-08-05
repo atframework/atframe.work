@@ -48,3 +48,15 @@ Repository: https://github.com/atframework/libatapp
 用于把 Excel 数据转换到 json/xml/lua/javascript/protobuf/msgpack 的工具集
 
 仓库集: https://github.com/xresloader/
+
+# AtgwInnerCli-CSharp
+
+https://github.com/atframework/AtgwInnerCli-CSharp
+
+atgateway 接入层的C#适配(支持Unity 3D)
+
+# Atapp-CSharp
+
+https://github.com/atframework/Atapp-CSharp
+
+libatapp 的C#适配(支持 .net core 和 .net framework)
