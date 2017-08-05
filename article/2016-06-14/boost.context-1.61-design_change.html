@@ -164,22 +164,22 @@
 			<div id="content" class="page-content" itemprop="articleBody">
 				<nav class="toc">
 <ul id="markdown-toc">
-  <li><a href="#section" id="markdown-toc-section">前言</a></li>
-  <li><a href="#section-1" id="markdown-toc-section-1">设计模型变化</a>    <ul>
-      <li><a href="#api" id="markdown-toc-api">API变化</a></li>
-      <li><a href="#section-2" id="markdown-toc-section-2">流程变化</a></li>
-      <li><a href="#section-3" id="markdown-toc-section-3">向前兼容</a></li>
-      <li><a href="#executioncontextv2" id="markdown-toc-executioncontextv2">execution_context_v2</a></li>
+  <li><a href="#前言" id="markdown-toc-前言">前言</a></li>
+  <li><a href="#设计模型变化" id="markdown-toc-设计模型变化">设计模型变化</a>    <ul>
+      <li><a href="#api变化" id="markdown-toc-api变化">API变化</a></li>
+      <li><a href="#流程变化" id="markdown-toc-流程变化">流程变化</a></li>
+      <li><a href="#向前兼容" id="markdown-toc-向前兼容">向前兼容</a></li>
+      <li><a href="#execution_context_v2" id="markdown-toc-execution_context_v2">execution_context_v2</a></li>
     </ul>
   </li>
-  <li><a href="#section-4" id="markdown-toc-section-4">存在的问题</a></li>
-  <li><a href="#section-5" id="markdown-toc-section-5">其他不是很重要的变化</a></li>
-  <li><a href="#libcopp" id="markdown-toc-libcopp">libcopp的修订</a></li>
+  <li><a href="#存在的问题" id="markdown-toc-存在的问题">存在的问题</a></li>
+  <li><a href="#其他不是很重要的变化" id="markdown-toc-其他不是很重要的变化">其他不是很重要的变化</a></li>
+  <li><a href="#libcopp的修订" id="markdown-toc-libcopp的修订">libcopp的修订</a></li>
 </ul>
 
 </nav>
 
-<h2 id="section">前言</h2>
+<h2 id="前言">前言</h2>
 <p>之前写了个C++的协程框架<a href="https://github.com/owt5008137/libcopp">libcopp</a>，底层使用的是boost.context实现，然后剥离了对boost的依赖。然而这样意味着我必须时常跟进<a href="http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/index.html">boost.context</a>的更新。</p>
 
 <p>顺带提一下这个协程库已经在我们线上服务器版本中使用了。</p>
@@ -188,9 +188,9 @@
 
 <p>然而这次变化就比较大了，首先所有的API都变更了，汇编代码里的参数和返回值也都发生了变化，当然语义也不一样了，另外还增加了新的API<strong>ontop_fcontext</strong>。这些变化使得<a href="https://github.com/owt5008137/libcopp">libcopp</a>的逻辑关系也必须有一些相应的调整，为了理清思路，这些都在后面分析。</p>
 
-<h2 id="section-1">设计模型变化</h2>
+<h2 id="设计模型变化">设计模型变化</h2>
 
-<h3 id="api">API变化</h3>
+<h3 id="api变化">API变化</h3>
 
 <p>先来看看原先的底层API</p>
 
@@ -313,7 +313,7 @@
 </code></pre>
 </div>
 
-<h3 id="section-2">流程变化</h3>
+<h3 id="流程变化">流程变化</h3>
 
 <p>诸如命名空间从boost转移到boost::detail这种废话我就不说了，这也是说作者不再希望用户直接使用这些接口了。然而这挡不住我非要直接用，哈哈。</p>
 
@@ -358,7 +358,7 @@
 
 <p>这个功能比较有意思，<a href="http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv2.html"><em>execution_context_v2</em></a>里也使用它来完成初始化和跳转后的数据预处理。不过目前<a href="https://github.com/owt5008137/libcopp">libcopp</a>还没有地方需要用到它，以后有时间再想想这玩意在什么情况下需要用到，然后再加接口。</p>
 
-<h3 id="section-3">向前兼容</h3>
+<h3 id="向前兼容">向前兼容</h3>
 
 <p>新的API不再像老的一样，跳转后会自动保存原来的上下文。所以在兼容之前的使用方法的时候，就需要手动来保存一下。<a href="http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/index.html">boost.context</a>是使用了一个新的对象来记录调用者信息</p>
 
@@ -431,7 +431,7 @@
 <p>看上面的代码，基本上向前兼容的方法就是新搞一个data_t数据记录来源的<a href="http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv1.html"><em>execution_context</em></a>的信息，透传过去后再把老的上下文保存进度。<br />
 并且这么做之后，由于要有方式获取正在进行的上下文是哪一个，它有个记录当前执行上下文的TLS变量就变成了关键的东西。而这个TLS变量的问题后面会再提到。</p>
 
-<h3 id="executioncontextv2">execution_context_v2</h3>
+<h3 id="execution_context_v2">execution_context_v2</h3>
 
 <p>新的boost.context提供了一个新版本的<a href="http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv2.html"><em>execution_context</em></a>对象，它其实是针对新的设计模型的一个执行上下文的抽象，并且粒度比以前的更小。所以你可以看到在性能比较的页面里v2版本的性能远高于v1。<br />
 实际上性能高的原因是<a href="http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv1.html">execution_context_v1</a>提供了有限的<a href="https://github.com/owt5008137/libcopp">libcopp</a>中coroutine提供的一部分功能，而<a href="http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/context/ecv2.html"><em>execution_context_v2</em></a>则是把这些功能拆分地力度更小，作为其他模块的组件的时候更灵活。<br />
@@ -529,13 +529,13 @@
 </code></pre>
 </div>
 
-<h2 id="section-4">存在的问题</h2>
+<h2 id="存在的问题">存在的问题</h2>
 <p>我是不建议使用<a href="http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/index.html">boost.context</a>的execution_context的。因为首先<a href="https://github.com/owt5008137/libcopp">libcopp</a>本身处理了它完成的功能，虽然它用模板写得，但是本身有一些兼容性问题。</p>
 
 <p>比如TLS的问题，因为默认的Android和IOS标准库不支持TLS，而它里面大量使用<em>thread_local</em>关键字。首先不说非C++11的模式下没有这个关键字，即便有，在Android和IOS的默认标准库下也会link error。<br />
 对于execution_context用TLS解决的问题，在<a href="https://github.com/owt5008137/libcopp">libcopp</a>里也同时存在，并且我也没想到什么好办法去解决（用pthread_create_key并不是特别理想），所以我现在的做法是，至少Android和IOS下单线程可用，多线程不支持<strong>copp::this_XXX</strong>功能。</p>
 
-<h2 id="section-5">其他不是很重要的变化</h2>
+<h2 id="其他不是很重要的变化">其他不是很重要的变化</h2>
 <p>这次的版本更新，<a href="http://www.boost.org/doc/libs/1_61_0/libs/context/doc/html/index.html">boost.context</a>也有一些非关键性的变更。之所以说非关键是因为这些东西可有可没有，即便没有的话自己实现也不困难。列举如下:</p>
 
 <ol>
@@ -543,7 +543,7 @@
   <li>很多函数重新整理了一下，增加了noexpect/nothrow等。</li>
 </ol>
 
-<h2 id="libcopp">libcopp的修订</h2>
+<h2 id="libcopp的修订">libcopp的修订</h2>
 <p>这次的merge，使用新的设计模型是必然的，但与此同时，我也会做一些细节的优化和调整。主要是下面几大块：</p>
 
 <ol>
@@ -608,7 +608,7 @@
 		
 		</ul>
 	</nav><!-- /.bottom-menu -->
-	<p class="copyright">&#169; 2016 <a href="">atframework</a> powered by <a href="http://jekyllrb.com" rel="nofollow">Jekyll</a> + <a href="http://mmistakes.github.io/skinny-bones-jekyll/" rel="nofollow">Skinny Bones</a>.</p>
+	<p class="copyright">&#169; 2017 <a href="">atframework</a> powered by <a href="http://jekyllrb.com" rel="nofollow">Jekyll</a> + <a href="http://mmistakes.github.io/skinny-bones-jekyll/" rel="nofollow">Skinny Bones</a>.</p>
 </footer>
     </div>
 

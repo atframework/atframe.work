@@ -1,0 +1,172 @@
+<p>最近一直没什么时间整理近期碰到的问题，今天思考了一下之前碰到的一个临时处理的BUG，顺便写点东西清理一下思路。</p>
+
+<p>其实严格来说这个BUG更应该是一个流程试用问题，不过这个问题应该是需要能在协程库里检测并抛出错误来。</p>
+
+<h2 id="libcopp的执行流程"><a href="https://github.com/owt5008137/libcopp">libcopp</a>的执行流程</h2>
+<p>这个BUG涉及最底层context的执行流程，这个协程库切入有两个接口（start和resume），截止目前为止，这两个接口其实是对等的，然后有一个切出接口（yield）。切入的时候需要记录调用者的执行上下文，用于在切出时上下文切出到哪里。问题是各种情况下的这个上下文保存的执行状态。</p>
+
+<p>然后再来看上下文切换的代码，第一部分是首次切入的入口（调用start函数）。</p>
+
+<div class="language-cpp highlighter-rouge"><pre class="highlight"><code><span class="kt">void</span> <span class="n">coroutine_context_base</span><span class="o">::</span><span class="n">coroutine_context_callback</span><span class="p">(</span><span class="o">::</span><span class="n">copp</span><span class="o">::</span><span class="n">fcontext</span><span class="o">::</span><span class="n">transfer_t</span> <span class="n">src_ctx</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">assert</span><span class="p">(</span><span class="n">src_ctx</span><span class="p">.</span><span class="n">data</span><span class="p">);</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nb">NULL</span> <span class="o">==</span> <span class="n">src_ctx</span><span class="p">.</span><span class="n">data</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">abort</span><span class="p">();</span>
+        <span class="k">return</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="c1">// copy jump_src_data_t in case it's destroyed later
+</span>    <span class="n">jump_src_data_t</span> <span class="n">jump_src</span> <span class="o">=</span> <span class="o">*</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="n">jump_src_data_t</span> <span class="o">*&gt;</span><span class="p">(</span><span class="n">src_ctx</span><span class="p">.</span><span class="n">data</span><span class="p">);</span>
+
+    <span class="c1">// this must in a coroutine
+</span>    <span class="n">coroutine_context_base</span> <span class="o">*</span><span class="n">ins_ptr</span> <span class="o">=</span> <span class="n">jump_src</span><span class="p">.</span><span class="n">to_co</span><span class="p">;</span>
+    <span class="n">assert</span><span class="p">(</span><span class="n">ins_ptr</span><span class="p">);</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nb">NULL</span> <span class="o">==</span> <span class="n">ins_ptr</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">abort</span><span class="p">();</span>
+        <span class="k">return</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="c1">// update caller of to_co
+</span>    <span class="n">ins_ptr</span><span class="o">-&gt;</span><span class="n">caller_</span> <span class="o">=</span> <span class="n">src_ctx</span><span class="p">.</span><span class="n">fctx</span><span class="p">;</span>
+
+    <span class="c1">// save from_co's fcontext and switch status
+</span>    <span class="k">if</span> <span class="p">(</span><span class="n">UTIL_CONFIG_NULLPTR</span> <span class="o">!=</span> <span class="n">jump_src</span><span class="p">.</span><span class="n">from_co</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">jump_src</span><span class="p">.</span><span class="n">from_co</span><span class="o">-&gt;</span><span class="n">callee_</span> <span class="o">=</span> <span class="n">src_ctx</span><span class="p">.</span><span class="n">fctx</span><span class="p">;</span>
+        <span class="kt">int</span> <span class="n">from_status</span> <span class="o">=</span> <span class="n">status_t</span><span class="o">::</span><span class="n">EN_CRS_RUNNING</span><span class="p">;</span> <span class="c1">// from coroutine change status from running to ready
+</span>        <span class="n">jump_src</span><span class="p">.</span><span class="n">from_co</span><span class="o">-&gt;</span><span class="n">status_</span><span class="p">.</span><span class="n">compare_exchange_strong</span><span class="p">(</span><span class="n">from_status</span><span class="p">,</span> <span class="n">status_t</span><span class="o">::</span><span class="n">EN_CRS_READY</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="c1">// this_coroutine
+</span>    <span class="n">set_this_coroutine_context</span><span class="p">(</span><span class="n">ins_ptr</span><span class="p">);</span>
+
+    <span class="c1">// run logic code
+</span>    <span class="n">ins_ptr</span><span class="o">-&gt;</span><span class="n">run_and_recv_retcode</span><span class="p">(</span><span class="n">jump_src</span><span class="p">.</span><span class="n">priv_data</span><span class="p">);</span>
+
+    <span class="n">ins_ptr</span><span class="o">-&gt;</span><span class="n">status_</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="n">status_t</span><span class="o">::</span><span class="n">EN_CRS_FINISHED</span><span class="p">);</span>
+    <span class="c1">// jump back to caller
+</span>    <span class="n">ins_ptr</span><span class="o">-&gt;</span><span class="n">yield</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre>
+</div>
+<p>最重要的是<em>save from_co’s fcontext and switch status</em>下面的这一段。这里的作用就是切入后要把跳入前的上下文保存到来源的协程中。</p>
+
+<p>然后是恢复的流程（调用resume/yield函数）：</p>
+<div class="language-cpp highlighter-rouge"><pre class="highlight"><code><span class="kt">void</span> <span class="n">coroutine_context_base</span><span class="o">::</span><span class="n">jump_to</span><span class="p">(</span><span class="n">fcontext</span><span class="o">::</span><span class="n">fcontext_t</span> <span class="o">&amp;</span><span class="n">to_fctx</span><span class="p">,</span> <span class="n">stack_context</span> <span class="o">&amp;</span><span class="n">from_sctx</span><span class="p">,</span> <span class="n">stack_context</span> <span class="o">&amp;</span><span class="n">to_sctx</span><span class="p">,</span>
+                                     <span class="n">jump_src_data_t</span> <span class="o">&amp;</span><span class="n">jump_transfer</span><span class="p">)</span> <span class="n">UTIL_CONFIG_NOEXCEPT</span> <span class="p">{</span>
+
+    <span class="n">copp</span><span class="o">::</span><span class="n">fcontext</span><span class="o">::</span><span class="n">transfer_t</span> <span class="n">res</span><span class="p">;</span>
+    <span class="n">jump_src_data_t</span> <span class="o">*</span><span class="n">jump_src</span><span class="p">;</span>
+    <span class="kt">int</span> <span class="n">from_status</span><span class="p">;</span>
+    <span class="kt">bool</span> <span class="n">swap_success</span><span class="p">;</span>
+<span class="c1">// can not use any more stack now
+// can not initialize those vars here
+</span>
+<span class="cp">#ifdef COPP_MACRO_USE_SEGMENTED_STACKS
+</span>    <span class="n">assert</span><span class="p">(</span><span class="o">&amp;</span><span class="n">from_sctx</span> <span class="o">!=</span> <span class="o">&amp;</span><span class="n">to_sctx</span><span class="p">);</span>
+    <span class="c1">// ROOT-&gt;A: jump_transfer.from_co == NULL, jump_transfer.to_co == A, from_sctx == A.caller_stack_, skip backup segments
+</span>    <span class="c1">// A-&gt;B.start(): jump_transfer.from_co == A, jump_transfer.to_co == B, from_sctx == B.caller_stack_, backup segments
+</span>    <span class="c1">// B.yield()-&gt;A: jump_transfer.from_co == B, jump_transfer.to_co == NULL, from_sctx == B.callee_stack_, skip backup segments
+</span>    <span class="k">if</span> <span class="p">(</span><span class="n">UTIL_CONFIG_NULLPTR</span> <span class="o">!=</span> <span class="n">jump_transfer</span><span class="p">.</span><span class="n">from_co</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">__splitstack_getcontext</span><span class="p">(</span><span class="n">jump_transfer</span><span class="p">.</span><span class="n">from_co</span><span class="o">-&gt;</span><span class="n">callee_stack_</span><span class="p">.</span><span class="n">segments_ctx</span><span class="p">);</span>
+        <span class="k">if</span> <span class="p">(</span><span class="o">&amp;</span><span class="n">from_sctx</span> <span class="o">!=</span> <span class="o">&amp;</span><span class="n">jump_transfer</span><span class="p">.</span><span class="n">from_co</span><span class="o">-&gt;</span><span class="n">callee_stack_</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">memcpy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">from_sctx</span><span class="p">.</span><span class="n">segments_ctx</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">jump_transfer</span><span class="p">.</span><span class="n">from_co</span><span class="o">-&gt;</span><span class="n">callee_stack_</span><span class="p">.</span><span class="n">segments_ctx</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">from_sctx</span><span class="p">.</span><span class="n">segments_ctx</span><span class="p">));</span>
+        <span class="p">}</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="n">__splitstack_getcontext</span><span class="p">(</span><span class="n">from_sctx</span><span class="p">.</span><span class="n">segments_ctx</span><span class="p">);</span>
+    <span class="p">}</span>
+    <span class="n">__splitstack_setcontext</span><span class="p">(</span><span class="n">to_sctx</span><span class="p">.</span><span class="n">segments_ctx</span><span class="p">);</span>
+<span class="cp">#endif
+</span>    <span class="n">res</span> <span class="o">=</span> <span class="n">copp</span><span class="o">::</span><span class="n">fcontext</span><span class="o">::</span><span class="n">copp_jump_fcontext</span><span class="p">(</span><span class="n">to_fctx</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">jump_transfer</span><span class="p">);</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nb">NULL</span> <span class="o">==</span> <span class="n">res</span><span class="p">.</span><span class="n">data</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">abort</span><span class="p">();</span>
+        <span class="k">return</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="n">jump_src</span> <span class="o">=</span> <span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="n">jump_src_data_t</span> <span class="o">*&gt;</span><span class="p">(</span><span class="n">res</span><span class="p">.</span><span class="n">data</span><span class="p">);</span>
+    <span class="n">assert</span><span class="p">(</span><span class="n">jump_src</span><span class="p">);</span>
+
+    <span class="cm">/**
+     * save from_co's fcontext and switch status
+     * we should use from_co in transfer_t, because it may not jump from jump_transfer.to_co
+     *
+     * if we jump sequence is A-&gt;B-&gt;C-&gt;A.resume(), and if this call is A-&gt;B, then
+     * jump_src-&gt;from_co = C, jump_src-&gt;to_co = A, jump_transfer.from_co = A, jump_transfer.to_co = B
+     * and now we should save the callee of C and set the caller of A = C
+     *
+     * if we jump sequence is A-&gt;B.yield()-&gt;A, and if this call is A-&gt;B, then
+     * jump_src-&gt;from_co = B, jump_src-&gt;to_co = NULL, jump_transfer.from_co = A, jump_transfer.to_co = B
+     * and now we should save the callee of B and should change the caller of A
+     *
+     */</span>
+
+    <span class="c1">// update caller of to_co if not jump from yield mode
+</span>    <span class="k">if</span> <span class="p">(</span><span class="n">UTIL_CONFIG_NULLPTR</span> <span class="o">!=</span> <span class="n">jump_src</span><span class="o">-&gt;</span><span class="n">to_co</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">jump_src</span><span class="o">-&gt;</span><span class="n">to_co</span><span class="o">-&gt;</span><span class="n">caller_</span> <span class="o">=</span> <span class="n">res</span><span class="p">.</span><span class="n">fctx</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">UTIL_CONFIG_NULLPTR</span> <span class="o">!=</span> <span class="n">jump_src</span><span class="o">-&gt;</span><span class="n">from_co</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">jump_src</span><span class="o">-&gt;</span><span class="n">from_co</span><span class="o">-&gt;</span><span class="n">callee_</span> <span class="o">=</span> <span class="n">res</span><span class="p">.</span><span class="n">fctx</span><span class="p">;</span>
+        <span class="n">from_status</span> <span class="o">=</span> <span class="n">jump_src</span><span class="o">-&gt;</span><span class="n">from_co</span><span class="o">-&gt;</span><span class="n">status_</span><span class="p">.</span><span class="n">load</span><span class="p">();</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">status_t</span><span class="o">::</span><span class="n">EN_CRS_RUNNING</span> <span class="o">==</span> <span class="n">from_status</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">jump_src</span><span class="o">-&gt;</span><span class="n">from_co</span><span class="o">-&gt;</span><span class="n">status_</span><span class="p">.</span><span class="n">compare_exchange_strong</span><span class="p">(</span><span class="n">from_status</span><span class="p">,</span> <span class="n">status_t</span><span class="o">::</span><span class="n">EN_CRS_READY</span><span class="p">);</span>
+        <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">status_t</span><span class="o">::</span><span class="n">EN_CRS_FINISHED</span> <span class="o">==</span> <span class="n">from_status</span><span class="p">)</span> <span class="p">{</span>
+            <span class="c1">// if in finished status, change it to exited
+</span>            <span class="n">jump_src</span><span class="o">-&gt;</span><span class="n">from_co</span><span class="o">-&gt;</span><span class="n">status_</span><span class="p">.</span><span class="n">store</span><span class="p">(</span><span class="n">status_t</span><span class="o">::</span><span class="n">EN_CRS_EXITED</span><span class="p">);</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="c1">// private data
+</span>    <span class="n">jump_transfer</span><span class="p">.</span><span class="n">priv_data</span> <span class="o">=</span> <span class="n">jump_src</span><span class="o">-&gt;</span><span class="n">priv_data</span><span class="p">;</span>
+
+    <span class="c1">// this_coroutine
+</span>    <span class="n">set_this_coroutine_context</span><span class="p">(</span><span class="n">jump_transfer</span><span class="p">.</span><span class="n">from_co</span><span class="p">);</span>
+    <span class="c1">// resume running status of from_co
+</span>    <span class="k">if</span> <span class="p">(</span><span class="nb">NULL</span> <span class="o">!=</span> <span class="n">jump_transfer</span><span class="p">.</span><span class="n">from_co</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">from_status</span> <span class="o">=</span> <span class="n">jump_transfer</span><span class="p">.</span><span class="n">from_co</span><span class="o">-&gt;</span><span class="n">status_</span><span class="p">.</span><span class="n">load</span><span class="p">();</span>
+        <span class="n">swap_success</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+        <span class="k">while</span> <span class="p">(</span><span class="o">!</span><span class="n">swap_success</span> <span class="o">&amp;&amp;</span> <span class="n">status_t</span><span class="o">::</span><span class="n">EN_CRS_READY</span> <span class="o">==</span> <span class="n">from_status</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">swap_success</span> <span class="o">=</span> <span class="n">jump_transfer</span><span class="p">.</span><span class="n">from_co</span><span class="o">-&gt;</span><span class="n">status_</span><span class="p">.</span><span class="n">compare_exchange_strong</span><span class="p">(</span><span class="n">from_status</span><span class="p">,</span> <span class="n">status_t</span><span class="o">::</span><span class="n">EN_CRS_RUNNING</span><span class="p">);</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre>
+</div>
+
+<p>同样，需要关注的部分是<em>update caller of to_co if not jump from yield mode</em>后面的保存上下下文的部分。</p>
+
+<p>所以到这里可以看到第一个麻烦的地方，流程上的两种（start/resume和yield）和上下文切换的两种（首次和后续）并不匹配；第二个麻烦的地方在于只有在切入完成以后才能拿到切入时切入方的上下文。所以导致执行流程比较复杂。</p>
+
+<h2 id="执行流程">执行流程</h2>
+<p>首先是正常的执行流程。</p>
+
+<p><strong>外部-&gt;协程A（yield）[-&gt;外部(resume)-&gt;协程A(yield)]…-&gt;外部</strong></p>
+
+<p>这时候，首次切入的时候，由首次的回调函数保存上下文。yield时，相当于切入的<strong>copp_jump_fcontext</strong>完成return，而后由后面的代码完成把上下文保存进协程的工作。resume的时候，相当于yield的<strong>copp_jump_fcontext</strong>完成return，然后用同样的方式保存上下文。</p>
+
+<p>其次是一个协程启动另一个协程，然后yield回前一个，走类似链式的流程，也是类似栈的流程。</p>
+
+<p><strong>外部-&gt;协程A（start）-&gt;协程B（yield）-&gt;协程A（yield）-&gt;外部</strong></p>
+
+<p>这种流程在携程B会记录caller为A的切出点，那么切回时流程也是走上面第一种情况一样的流程。</p>
+
+<h2 id="问题流程">问题流程</h2>
+<p>这两种流程最常用，并且已经使用很久了并不会有什么问题。然后第三种情况是最近一个特殊流程导致的。</p>
+
+<p><strong>外部-&gt;协程A（start）-&gt;协程B（resume）-&gt;协程A（yield）-&gt;…</strong></p>
+
+<p>按最早的设计，协程A通过resume或者start接口第二次切入后，会更新协程A的caller为协程B（注释里写得状态信息更完整一些，但是考虑的调用链更长）。但是现在精简下调用链和这个执行流程，就不容易发现，这也是不正确的。因为这时候再也切不回最外部的调用者了。</p>
+
+<p>然后我的第一反应是，这样的话可以尝试后续的切入流程不再更新caller，只在第一次切入时更新caller。但是这样也不正确，因为假设协程B第二次通过resume切入协程A的时候，如果没有更新调用信息，那么其实协程A已经运行了一段代码了，而协程B里记录的还是老的值，这样协程B如果使用yield那么也是不对的。</p>
+
+<p>其实我还考虑过，协程的caller保存协程指针而不只是上下文。但是这样也是有问题的，一个是数据保存的流程和生命周期很难管理，其次是碰到复杂的调用流程的话，还是没法通知某些协程通知caller。</p>
+
+<h2 id="解决方案">解决方案</h2>
+<p>所以最终最安全的解决方案还是加个flag禁止掉这种调用。即一旦一个协程被切入了，只能通过yield切出。而同理，没有被切入的协程，必须通过start/resume切入。</p>
+
+<p>不过其实会触发这个BUG还有另一个原因，<a href="https://github.com/atframework/libatbus">libatbus</a>有一处优化是，如果发送的消息目标是自己，那么会通过递归的方式直接回调接收事件（这也能够使发送给自己的消息少一次copy）。然后这个事件能导致协程调用resume。</p>
+
+<p>但是根据实际的使用情况，自己发给自己的消息是非常少见的，并且对外发豆油一次copy，发给自己减少掉这次copy意义不是很大。另外解包的CPU消耗应该本身比copy要高得多，所以我打算果断时间对<a href="https://github.com/atframework/libatbus">libatbus</a>给自己发消息的时序也做一次优化，模拟成异步消息。这样也能解决一些隐性的前期以来问题。</p>
+
+<p>当然有限还是先加<a href="https://github.com/owt5008137/libcopp">libcopp</a>的这个patch和单元测试。也是之前的单元测试没有覆盖到这种情况才导致现在才发现这种流程BUG。</p>
+
+<blockquote>
+  <p>Written with <a href="https://stackedit.io/">StackEdit</a>.</p>
+</blockquote>
