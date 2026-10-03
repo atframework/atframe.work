@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkatsf4g_co_docs||=[]).push([[9647],{8660(s,e,r){r.r(e),r.d(e,{default:()=>l});r(758);var a=r(3526),c=r(351),t=r(8516),u=r(389),o=r(6268),d=r(6070);function l(s){return(0,d.jsx)(t.e3,{className:(0,a.A)(c.G.wrapper.docsPages),children:(0,d.jsx)(o.A,{children:(0,u.v)(s.route.routes)})})}}}]);
