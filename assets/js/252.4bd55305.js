@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkatsf4g_co_docs||=[]).push([[252],{252(c,e,s){s.d(e,{createArchitectureServices:()=>r.S});var r=s(4561);s(508)}}]);

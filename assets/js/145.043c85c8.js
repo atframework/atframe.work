@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkatsf4g_co_docs||=[]).push([[145],{145(e,s,c){c.d(s,{createEventModelingServices:()=>a.g});var a=c(5896);c(508)}}]);

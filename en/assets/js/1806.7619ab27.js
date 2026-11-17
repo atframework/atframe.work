@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkatsf4g_co_docs||=[]).push([[1806],{1806(c,e,s){s.d(e,{createPacketServices:()=>a.$});var a=s(6160);s(508)}}]);
